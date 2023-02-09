@@ -1,4 +1,3 @@
-# Import required packages:
 library(shiny)
 library(dataRetrieval)
 library(shinycssloaders)
@@ -8,6 +7,7 @@ library(sf)
 library(stringr)
 library(plotly)
 library(lubridate)
+library(crayon)
 
 
 # Get a list of all parameter codes:
@@ -28,6 +28,18 @@ ui <- fluidPage(
   sidebarLayout(
     
     sidebarPanel(
+      
+      tags$head(
+        tags$style(HTML("
+      .shiny-output-error-validation {
+        color: #ff0000;
+        font-weight: bold;
+      }
+    "))
+      ),
+      
+      
+      
       # Allow user to select state of interest (FL by default):
       selectInput("state", label = strong("State"),
                   choices = state.abb,selected = 'FL'),
@@ -45,6 +57,12 @@ ui <- fluidPage(
       # Allow user to input site number:
       textInput(inputId = "site",
                 label = "Site number"),
+      
+      # Generate button for user to view info about site in main panel:
+      actionButton("siteDat", label = "View Site Data"),
+      
+      br(),
+      br(),
       
       # Allow user to select the data interval (mean daily or 15-minute):
       selectInput("interval", label = strong("Time interval"), 
@@ -134,6 +152,7 @@ ui <- fluidPage(
   )
 )
 
+
 server <- function(input, output, session) {
   
   # Populate parameter code choices. Discharge selected as default since it
@@ -166,7 +185,17 @@ server <- function(input, output, session) {
   })
   
   # Generate table of data and display on screen:
-  output$table <- renderTable({usgs.data()})
+  output$table <- renderTable({
+    tbl <- usgs.data()
+             validate(
+               need(nrow(tbl) > 0, paste0("No data available.
+
+This is due to:
+      1) Parameter code data not available at selected site
+      2) 'Mean Daily' was selected while start and end date are the same")
+                   
+    tbl
+  })
   
   
   # Download the datatable and create name based on site and interval selected:
@@ -219,6 +248,9 @@ server <- function(input, output, session) {
                    sep = '<br/>'),
                  popupOptions = popupOptions(closeButton = FALSE))
   })
+  
+  
 }
+
 
 shinyApp(ui, server)
