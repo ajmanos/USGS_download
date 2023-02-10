@@ -8,6 +8,8 @@ library(stringr)
 library(plotly)
 library(lubridate)
 library(crayon)
+library(tidyr)
+
 
 
 # Get a list of all parameter codes:
@@ -58,27 +60,32 @@ ui <- fluidPage(
       textInput(inputId = "site",
                 label = "Site number"),
       
-      # Generate button for user to view info about site in main panel:
-      actionButton("siteDat", label = "View Site Data"),
       
-      br(),
-      br(),
+      # Allow user to select the data type (mean daily or real time):
+      selectInput("type", label = strong("Data type"), 
+                  choices = c("Daily" = 'daily',
+                              "Real Time" = 'real_time',
+                              "Water Quality" = "water_quality"), 
+                  selected = 'Daily'),
       
-      # Allow user to select the data interval (mean daily or 15-minute):
-      selectInput("interval", label = strong("Time interval"), 
-                  choices = c("Mean Daily" = 'mean_daily',
-                              "15-minute" = '15_minute'), 
-                  selected = 'Mean Daily'),
+      # Allow user to select the data type (mean daily or real time):
+      selectInput("stat", label = strong("Stat Code"), 
+                  choices = c("00001 (Max)" = "00001",
+                              "00002 (Min)" = "00002",
+                              "00003 (Mean)" = '00003',
+                              "00006 (Sum)" = '00006',
+                              "00008 (Median)" = '00008'), 
+                  selected = '00003 (Mean)'),
     
-    
+
       
       # Allow user to select date range:
       dateRangeInput("dates", label = strong("Date range")),
       
-
       
       # Generate button for user to load data after imputing parameters:
       actionButton("load", label = "Load Data"),
+      
       br(),
       br(),
       
@@ -119,23 +126,28 @@ ui <- fluidPage(
             and paste into the site number box in the side panel"),
 
       br(),
-      h4(strong("Step 4: Select Time Interval")),
-      h5("- Using the 'Time Interval' drop down
-            menu, select either mean daily or 15-minute."),
+      h4(strong("Step 4: Select Data type")),
+      h5("- Using the 'Data type' drop down
+            menu, select the type of data to display."),
       
       br(),
-      h4(strong("Step 5: Select Date Range")),
+      h4(strong("Step 5: Select Stat Code")),
+      h5("- Using the 'Stat Code' drop down
+            menu, select the statistic to be applied to the data."),
+      
+      br(),
+      h4(strong("Step 6: Select Date Range")),
       h5("- After selecting a date range, click 'Load Data'
             to view a table of data in the 'Table' window."),
       h5("- Toggle to the 'Plot' window to view a plot of the data."),
       
       br(),
-      h4(strong("Step 6: Download the Data")),
+      h4(strong("Step 7: Download the Data")),
       h5("- Click 'Download Data', to download the data
             in the output table to an excel file."),
       
       br(),
-      h5(strong("*Note: the table, plot, and map tabs will not automatically
+      h5(strong("*Note: the site data/info, plot, and map tabs will not automatically
                 update, 'Load Data' must be clicked to view outputs with
                 updated information (i.e., parameter code, date range, etc.)."))
       
@@ -144,7 +156,8 @@ ui <- fluidPage(
     # Display tabs for table of data, plot of data, and map of USGS sites:
     mainPanel(
       tabsetPanel(type = "tabs",
-                  tabPanel("Table", tableOutput("table") %>% withSpinner(color="blue")),
+                  tabPanel("Site Data", tableOutput("table") %>% withSpinner(color="blue")),
+                  tabPanel("Site Info", tableOutput("Infotable") %>% withSpinner(color="blue")),
                   tabPanel("Plot", plotlyOutput("plot")),
                   tabPanel('Map', leafletOutput('map',height = 900) %>% 
                                                      withSpinner(color="blue")))
@@ -155,25 +168,56 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
+  
+  site <- eventReactive(input$load, {
+    x <- whatNWISdata(siteNumber = input$site) %>% drop_na(parm_cd)
+    
+    f <- data.frame(x$parm_cd)
+    for (i in 1:nrow(f)){
+      f$desc[i] <- subset(codes.dat$desc, codes.dat$CODES==f$x.parm_cd[i])
+    }
+    
+    y <- data.frame(x$site_no, x$station_nm,x$parm_cd,f$desc, x$data_type_cd,
+                    x$stat_cd,as.character(x$begin_date),as.character(x$end_date))
+    colnames(y) <- c("Site Number","Station Name","Parameter Code","Description", 
+                     "Data Type", "Stat Code", "Start Date","End Date")
+    
+    y$`Data Type` <- ifelse(y$`Data Type` == 'dv', 'Daily', 
+                       ifelse(y$`Data Type` == 'uv', 'Real Time',
+                         ifelse(y$`Data Type` == 'qw', 'Water Quality',
+                           ifelse(y$`Data Type` == 'gwlevel', 'Groundwater',
+                             ifelse(y$`Data Type` == 'rating', 'Rating Curve',
+                               ifelse(y$`Data Type` == 'peak', 'Peak Flow',
+                                 ifelse(y$`Data Type` == 'meas', 'Surfacewater',"")))))))
+    
+    return(y)
+  })
+  
+  # Generate table of data and display on screen:
+  output$Infotable <- renderTable({site()})
+  
+  
+
   # Populate parameter code choices. Discharge selected as default since it
   # is the most popular:
   updateSelectizeInput(session, 'pCode', choices = codesD, server = TRUE,
                        selected = '00060 (Discharge, cubic feet per second)')
 
   
-  # When user clicks 'Load Data' run the USGS 'dataRetrieval' package either 
-  # for mean daily or 15-minute based on user selection:
+#   # When user clicks 'Load Data' run the USGS 'dataRetrieval' package either 
+#   # for mean daily or real time based on user selection:
   usgs.data <- eventReactive(input$load, {
-    if (input$interval == 'mean_daily') {
+    if (input$type == 'daily') {
       df1 <- readNWISdv(siteNumbers = input$site,
                         parameterCd = substr(input$pCode, 1,5),
+                        statCd = substr(input$stat, 1,5),
                         startDate = input$dates[1],
-                        endDate = input$dates[2])  
+                        endDate = input$dates[2])
       df1$Date <- as.character(df1$Date)
       df1 <- renameNWISColumns(df1)
       return(df1)
-    }  
-    if (input$interval == '15_minute') {
+    }
+    if (input$type == 'real_time') {
       df1 <- readNWISuv(siteNumbers = input$site,
                         parameterCd = substr(input$pCode, 1,5),
                         startDate = input$dates[1],
@@ -182,26 +226,38 @@ server <- function(input, output, session) {
       df1 <- renameNWISColumns(df1)
       return(df1)
     }
+    #TODO: USGS is retiring this function, update when non-functional
+    # vignette('qwdata_changes', package = 'dataRetrieval')
+    if (input$type == 'water_quality') {
+      df1 <- readNWISqw(siteNumbers = input$site,
+                        parameterCd = substr(input$pCode, 1,5),
+                        startDate = input$dates[1],
+                        endDate = input$dates[2])
+      df1$dateTime <- as.character(df1$date)
+      df1 <- renameNWISColumns(df1)
+      return(df1)
+    }
   })
-  
+
   # Generate table of data and display on screen:
   output$table <- renderTable({
     tbl <- usgs.data()
              validate(
-               need(nrow(tbl) > 0, paste0("No data available.
+               need(nrow(tbl) > 0,"No data available.
 
-This is due to:
-      1) Parameter code data not available at selected site
-      2) 'Mean Daily' was selected while start and end date are the same")
-                   
+This could be due to:
+      1) Parameter code not available at selected site
+      2) 'Stat code' not available at selected site
+      3) 'Daily' was selected while start and end date are the same"))
+
     tbl
   })
+
   
-  
-  # Download the datatable and create name based on site and interval selected:
+  # Download the datatable and create name based on site and type selected:
   output$downloadData <- downloadHandler(
     filename = function(){paste0('USGS_',input$site,'_', names(renameNWISColumns(usgs.data()))[4], "_",
-                                 input$interval,'_',min(year(usgs.data()[,3])),'_',
+                                 input$type,'_',min(year(usgs.data()[,3])),'_',
                                  max(year(usgs.data()[,3])),'.xlsx')},
     content = function(fname) {
       write_xlsx(usgs.data(),fname)   
@@ -211,7 +267,7 @@ This is due to:
   # Generate plot of output table:
   output$plot <- renderPlotly({
     plot_ly(usgs.data(), type = 'scatter', mode='lines',height=800) %>%
-      add_trace(x = if (input$interval == 'mean_daily')  ~Date else ~dateTime, 
+      add_trace(x = if (input$type == 'daily')  ~Date else ~dateTime, 
                 y = ~usgs.data()[,4], line=list(color='darkblue')) %>%
       layout(showlegend = FALSE, yaxis = list(title = str_sub(input$pCode,8,-2)))
   })
@@ -244,7 +300,7 @@ This is due to:
       addMarkers(clusterOptions = markerClusterOptions(zoomToBoundsOnClick = T), 
                  popup = ~paste(
                    paste('<b>', 'ID:', '</b>', site_no), 
-                   paste('<b>',  'Monitoring Location:', '</b>', station_nm),
+                   paste('<b>',  'Station Name:', '</b>', station_nm),
                    sep = '<br/>'),
                  popupOptions = popupOptions(closeButton = FALSE))
   })
