@@ -4,13 +4,11 @@ library(shinycssloaders)
 library(writexl)
 library(leaflet)
 library(sf)
-library(stringr)
 library(plotly)
 library(lubridate)
 library(crayon)
-library(tidyr)
-
-
+library(raster)
+library(tidyverse)
 
 # Get a list of all parameter codes:
 codes.all <- readNWISpCode("all")
@@ -75,24 +73,33 @@ ui <- fluidPage(
                               "00003 (Mean)" = '00003',
                               "00006 (Sum)" = '00006',
                               "00008 (Median)" = '00008'), 
-                  selected = '00003 (Mean)'),
-    
-
+                  selected = '00003'),
+      
+      
       
       # Allow user to select date range:
       dateRangeInput("dates", label = strong("Date range")),
       
       
       # Generate button for user to load data after imputing parameters:
-      actionButton("load", label = "Load Data"),
+      actionButton("load", label = "Load Data", class = "btn-success",
+                   icon = icon("refresh")),
       
-      br(),
+      hr(),
       br(),
       
       # Generate download button for user to download data:
       downloadButton("downloadData", "Download Data"),
-
+      
       hr(),
+      
+      h5("This dashboard utilizes the",
+         code("dataRetrieval"),
+         "R package developed by the USGS. Please visit the USGS",
+         a("blog post",
+           href = "https://waterdata.usgs.gov/blog/dataretrieval/"),
+         "for more information."),
+      
       
       br(),
       h3(strong('How to use USGS downloader')),
@@ -124,7 +131,7 @@ ui <- fluidPage(
             the map tab, and search for a site of interest. Click
             the site pin, copy the site number in the info box,
             and paste into the site number box in the side panel"),
-
+      
       br(),
       h4(strong("Step 4: Select Data type")),
       h5("- Using the 'Data type' drop down
@@ -158,9 +165,10 @@ ui <- fluidPage(
       tabsetPanel(type = "tabs",
                   tabPanel("Site Data", tableOutput("table") %>% withSpinner(color="blue")),
                   tabPanel("Site Info", tableOutput("Infotable") %>% withSpinner(color="blue")),
-                  tabPanel("Plot", plotlyOutput("plot")),
+                  tabPanel("Linear Time Series", plotlyOutput("plot") %>% withSpinner(color="blue")),
+                  tabPanel("3D Time Series", plotlyOutput("fr_plot") %>% withSpinner(color="blue")),
                   tabPanel('Map', leafletOutput('map',height = 900) %>% 
-                                                     withSpinner(color="blue")))
+                             withSpinner(color="blue")))
     )
   )
 )
@@ -183,13 +191,13 @@ server <- function(input, output, session) {
                      "Data Type", "Stat Code", "Start Date","End Date")
     
     y$`Data Type` <- ifelse(y$`Data Type` == 'dv', 'Daily', 
-                       ifelse(y$`Data Type` == 'uv', 'Real Time',
-                         ifelse(y$`Data Type` == 'qw', 'Water Quality',
-                           ifelse(y$`Data Type` == 'gwlevel', 'Groundwater',
-                             ifelse(y$`Data Type` == 'rating', 'Rating Curve',
-                               ifelse(y$`Data Type` == 'peak', 'Peak Flow',
-                                 ifelse(y$`Data Type` == 'meas', 'Surfacewater',"")))))))
-    
+                      ifelse(y$`Data Type` == 'uv', 'Real Time',
+                       ifelse(y$`Data Type` == 'qw', 'Water Quality',
+                        ifelse(y$`Data Type` == 'gwlevel', 'Groundwater',
+                         ifelse(y$`Data Type` == 'rating', 'Rating Curve',
+                          ifelse(y$`Data Type` == 'peak', 'Peak Flow',
+                           ifelse(y$`Data Type` == 'meas', 'Surfacewater',"")))))))
+
     return(y)
   })
   
@@ -197,16 +205,20 @@ server <- function(input, output, session) {
   output$Infotable <- renderTable({site()})
   
   
-
+  
   # Populate parameter code choices. Discharge selected as default since it
   # is the most popular:
   updateSelectizeInput(session, 'pCode', choices = codesD, server = TRUE,
                        selected = '00060 (Discharge, cubic feet per second)')
-
   
-#   # When user clicks 'Load Data' run the USGS 'dataRetrieval' package either 
-#   # for mean daily or real time based on user selection:
+  
+  #   # When user clicks 'Load Data' run the USGS 'dataRetrieval' package either 
+  #   # for mean daily or real time based on user selection:
   usgs.data <- eventReactive(input$load, {
+    validate(need(nchar(input$site) >= 8, "Error: Site number must be at least 8 digits."))
+    validate(need(nchar(input$site) <= 15, "Error: Site number must be less than 15 digits."))
+    validate(need(!is.na(as.numeric(input$site)), "Error: Invalid site number, only numbers are accepted."))
+    validate(need(input$dates[1] < input$dates[2], "Error: Start date must be less than end date."))
     if (input$type == 'daily') {
       df1 <- readNWISdv(siteNumbers = input$site,
                         parameterCd = substr(input$pCode, 1,5),
@@ -238,21 +250,22 @@ server <- function(input, output, session) {
       return(df1)
     }
   })
-
+  
   # Generate table of data and display on screen:
   output$table <- renderTable({
     tbl <- usgs.data()
-             validate(
-               need(nrow(tbl) > 0,"No data available.
-
+    validate(
+      need(nrow(tbl) > 0,"No data available.
+      
 This could be due to:
-      1) Parameter code not available at selected site
-      2) 'Stat code' not available at selected site
-      3) 'Daily' was selected while start and end date are the same"))
-
+      1) Incorrect site number
+      2) Parameter code not available at site
+      3) Stat code not available at site
+      4) Data type is 'Daily' while date range is set for same date"))
+    
     tbl
   })
-
+  
   
   # Download the datatable and create name based on site and type selected:
   output$downloadData <- downloadHandler(
@@ -267,9 +280,37 @@ This could be due to:
   # Generate plot of output table:
   output$plot <- renderPlotly({
     plot_ly(usgs.data(), type = 'scatter', mode='lines',height=800) %>%
-      add_trace(x = if (input$type == 'daily')  ~Date else ~dateTime, 
+      add_trace(x = if (input$type == 'daily') ~Date else ~dateTime, 
                 y = ~usgs.data()[,4], line=list(color='darkblue')) %>%
-      layout(showlegend = FALSE, yaxis = list(title = str_sub(input$pCode,8,-2)))
+      layout(title = list(text = readNWISsite(input$site)$station_nm),
+        showlegend = FALSE, yaxis = list(title = str_sub(input$pCode,8,-2)))
+  })
+  
+  
+  
+  # Generate plot of output table:
+  output$fr_plot <- renderPlotly({
+    FlowMatrix <- data.frame(Day = yday(usgs.data()$Date), Year = year(usgs.data()$Date), Var = usgs.data()[,4])
+    var_mat <- as.matrix(rasterFromXYZ(FlowMatrix))
+    rownames(var_mat) <- rev(seq(min(FlowMatrix$Year),max(FlowMatrix$Year),1))
+    y <- as.numeric(rownames(var_mat))
+    tck_num <- round(seq(1, 366, by = 30.5))
+    tck_mo <- month.abb[parse_date_time(tck_num, orders = "j") %>% 
+      month()]
+
+    plot_ly(z = var_mat, y = y, type = "surface", height = 900,
+            colorscale = list(thresholds_colors = seq(0, 1, length = 6),
+                              colors = c('gray','blue','skyblue','green','yellow','red')),
+            showscale=TRUE) %>%
+      layout(title = list(text = readNWISsite(input$site)$station_nm,x=0.47, y=0.92),
+             scene=list(
+               yaxis=list(title='Year',dtick=5),
+               zaxis = list(title = paste0(names(renameNWISColumns(usgs.data()))[4],
+                                           " (",readNWISpCode(substring(input$pCode,1,5))$parameter_units,")")),
+               xaxis = list(title = 'Month',autorange="reversed",
+                            tickvals = seq(1, 366, by = 30.5),
+                            ticktext = tck_mo),
+               camera = list(eye = list(x = 1.3, y = 1.3, z = 1.5))))
   })
   
   # Define the URL to use display the USGS website based on user site input:
