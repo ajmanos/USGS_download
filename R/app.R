@@ -38,8 +38,7 @@ ui <- fluidPage(
     "))
       ),
       
-      
-      
+  
       # Allow user to select state of interest (FL by default):
       selectInput("state", label = strong("State"),
                   choices = state.abb,selected = 'FL'),
@@ -62,8 +61,7 @@ ui <- fluidPage(
       # Allow user to select the data type (mean daily or real time):
       selectInput("type", label = strong("Data type"), 
                   choices = c("Daily" = 'daily',
-                              "Real Time" = 'real_time',
-                              "Water Quality" = "water_quality"), 
+                              "Real Time" = 'real_time'), 
                   selected = 'Daily'),
       
       # Allow user to select the data type (mean daily or real time):
@@ -86,7 +84,6 @@ ui <- fluidPage(
                    icon = icon("refresh")),
       
       hr(),
-      br(),
       
       # Generate download button for user to download data:
       downloadButton("downloadData", "Download Data"),
@@ -100,64 +97,6 @@ ui <- fluidPage(
            href = "https://waterdata.usgs.gov/blog/dataretrieval/"),
          "for more information."),
       
-      
-      br(),
-      h3(strong('How to use USGS downloader')),
-      
-      br(),
-      h4(strong('Step 1: Select a State')),
-      h5("- Use the drop down menu to select a state of
-            interest."),
-      h5(strong('*Note: State selection only used for viewing sites
-          in the map tab.')),
-      
-      br(),
-      h4(strong('Step 2: Input Parameter Code')),
-      h5("- Use the dropdown menu to select a parameter code
-            or enter the description in the parameter code box."),
-      h5("- Click the 'Parameter code' link to view a list of codes
-            and code information on the USGS website."),
-      h5("- The 'Map' tab will display sites that contain data from
-            the entered parameter code. Enter a new code and click
-            'Load Data' to view new sites."),
-      
-      br(),
-      h4(strong('Step 3: Input Site Number')),
-      h5("- If site is known, simply enter site in the box.
-            Once 'Load Data' is clicked, a link to the site
-            from the USGS website will be displayed above
-            the site number."),
-      h5("- If site is not known, enter a parameter code, click 'Load Data', select
-            the map tab, and search for a site of interest. Click
-            the site pin, copy the site number in the info box,
-            and paste into the site number box in the side panel"),
-      
-      br(),
-      h4(strong("Step 4: Select Data type")),
-      h5("- Using the 'Data type' drop down
-            menu, select the type of data to display."),
-      
-      br(),
-      h4(strong("Step 5: Select Stat Code")),
-      h5("- Using the 'Stat Code' drop down
-            menu, select the statistic to be applied to the data."),
-      
-      br(),
-      h4(strong("Step 6: Select Date Range")),
-      h5("- After selecting a date range, click 'Load Data'
-            to view a table of data in the 'Table' window."),
-      h5("- Toggle to the 'Plot' window to view a plot of the data."),
-      
-      br(),
-      h4(strong("Step 7: Download the Data")),
-      h5("- Click 'Download Data', to download the data
-            in the output table to an excel file."),
-      
-      br(),
-      h5(strong("*Note: the site data/info, plot, and map tabs will not automatically
-                update, 'Load Data' must be clicked to view outputs with
-                updated information (i.e., parameter code, date range, etc.)."))
-      
     ),
     
     # Display tabs for table of data, plot of data, and map of USGS sites:
@@ -165,13 +104,77 @@ ui <- fluidPage(
       tabsetPanel(type = "tabs",
                   tabPanel("Site Data", tableOutput("table") %>% withSpinner(color="blue")),
                   tabPanel("Site Info", tableOutput("Infotable") %>% withSpinner(color="blue")),
-                  tabPanel("Linear Time Series", plotlyOutput("plot") %>% withSpinner(color="blue")),
-                  tabPanel("3D Time Series", plotlyOutput("fr_plot") %>% withSpinner(color="blue")),
+                  tabPanel("Linear Time Series", plotlyOutput("ts_line") %>% withSpinner(color="blue")),
+                  tabPanel("3D Time Series", plotlyOutput("ts_3d") %>% withSpinner(color="blue")),
                   tabPanel('Map', leafletOutput('map',height = 900) %>% 
-                             withSpinner(color="blue")))
+                             withSpinner(color="blue")),
+                  tabPanel("Instructions",  h3(strong('How to use USGS downloader')),
+
+                           br(),
+                           h4(strong('Step 1: Select a State')),
+                           tags$li("Use the drop down menu to select a state of
+                                    interest."),
+                           tags$li("Click the 'Map' tab to view sites available for selected parameter code."),
+                           tags$li(strong('*Note: State selection only used for viewing sites in the map tab.
+                                       State selection will not impact other parameters.')),
+
+                           br(),
+                           h4(strong('Step 2: Input Parameter Code')),
+                           tags$li("Use the dropdown menu to select a parameter code
+                                 or enter a code/description in the parameter code box."),
+                           tags$li("Click the 'Parameter code' link to view a list of codes
+                                 and code information on the USGS website."),
+
+                           br(),
+                           h4(strong('Step 3: Input Site Number')),
+                           tags$li("If site is known, simply enter site in the box and click 'Load Data'.
+                                 Once data are loaded, a link to the site from the USGS website will
+                                 be displayed above the site number."),
+                           tags$li("If site is not known, enter a parameter code, click 'Load Data', select
+                                 the map tab, and search for a site of interest. Click
+                                 the site pin, copy the site number from the info box,
+                                 and paste into the site number box in the side panel"),
+
+                           br(),
+                           h4(strong("Step 4: Select Data type")),
+                           tags$li("Using the 'Data type' drop down
+                                 menu, select the type of data to display."),
+                           tags$li("Daily = mean daily data"),
+                           tags$li("Real Time = 15-minute intervals"),
+
+                           br(),
+                           h4(strong("Step 5: Select Stat Code")),
+                           tags$li("Using the 'Stat Code' drop down menu, select the statistic to be
+                                 applied to the data."),
+                           tags$li("To view available site codes, load site data and click the 'Site Info'
+                                 tab for possible parameter/stat codes, data types, and date ranges."),
+
+                           br(),
+                           h4(strong("Step 6: Select Date Range")),
+                           tags$li("After selecting a date range, click 'Load Data' to view a table of
+                                 data in the 'Site Data' tab"),
+                           tags$li("Toggle to the 'Plot' window to view a plot of the data."),
+
+                           br(),
+                           h4(strong("Step 7: View Graphed Data")),
+                           tags$li("Select the 'Linear Time Series' tab to view a time series of the
+                                 selected parameters"),
+                           tags$li("Selectthe '3D Time Series' tab to view a 3D representation of the
+                                 time series data."),
+
+                           br(),
+                           h4(strong("Step 8: Download the Data")),
+                           tags$li("Click 'Download Data', to download the data
+                                 in the output table to an excel file."),
+
+                           br(),
+                           tags$li(strong("*Note: Tabs will not automatically update when new parameters
+                                     are set, 'Load Data' must be clicked to view outputs with
+                                     updated information (i.e., parameter code, site number, etc.)."))))
     )
   )
 )
+
 
 
 server <- function(input, output, session) {
@@ -238,17 +241,6 @@ server <- function(input, output, session) {
       df1 <- renameNWISColumns(df1)
       return(df1)
     }
-    #TODO: USGS is retiring this function, update when non-functional
-    # vignette('qwdata_changes', package = 'dataRetrieval')
-    if (input$type == 'water_quality') {
-      df1 <- readNWISqw(siteNumbers = input$site,
-                        parameterCd = substr(input$pCode, 1,5),
-                        startDate = input$dates[1],
-                        endDate = input$dates[2])
-      df1$dateTime <- as.character(df1$date)
-      df1 <- renameNWISColumns(df1)
-      return(df1)
-    }
   })
   
   # Generate table of data and display on screen:
@@ -257,11 +249,11 @@ server <- function(input, output, session) {
     validate(
       need(nrow(tbl) > 0,"No data available.
       
-This could be due to:
-      1) Incorrect site number
-      2) Parameter code not available at site
-      3) Stat code not available at site
-      4) Data type is 'Daily' while date range is set for same date"))
+    This could be due to:
+          1) Incorrect site number
+          2) Parameter code not available at site
+          3) Stat code not available at site
+          4) Data type is 'Daily' while date range is set for same date"))
     
     tbl
   })
@@ -278,7 +270,7 @@ This could be due to:
   
   
   # Generate plot of output table:
-  output$plot <- renderPlotly({
+  output$ts_line <- renderPlotly({
     plot_ly(usgs.data(), type = 'scatter', mode='lines',height=800) %>%
       add_trace(x = if (input$type == 'daily') ~Date else ~dateTime, 
                 y = ~usgs.data()[,4], line=list(color='darkblue')) %>%
@@ -289,7 +281,9 @@ This could be due to:
   
   
   # Generate plot of output table:
-  output$fr_plot <- renderPlotly({
+  output$ts_3d <- renderPlotly({
+    #TODO: 3d time series for real-time data
+    validate(need(names(usgs.data()[3]) == 'Date', "3D time series plot does not currently support real time data."))
     FlowMatrix <- data.frame(Day = yday(usgs.data()$Date), Year = year(usgs.data()$Date), Var = usgs.data()[,4])
     var_mat <- as.matrix(rasterFromXYZ(FlowMatrix))
     rownames(var_mat) <- rev(seq(min(FlowMatrix$Year),max(FlowMatrix$Year),1))
@@ -297,20 +291,27 @@ This could be due to:
     tck_num <- round(seq(1, 366, by = 30.5))
     tck_mo <- month.abb[parse_date_time(tck_num, orders = "j") %>% 
       month()]
+    
+    leg_title <- paste0(names(renameNWISColumns(usgs.data()))[4],
+                 " (",readNWISpCode(substring(input$pCode,1,5))$parameter_units,")")
+    
 
-    plot_ly(z = var_mat, y = y, type = "surface", height = 900,
-            colorscale = list(thresholds_colors = seq(0, 1, length = 6),
-                              colors = c('gray','blue','skyblue','green','yellow','red')),
-            showscale=TRUE) %>%
+    plot_ly(height = 900) %>%
+      add_surface(z = var_mat, 
+                  y = y,
+                  colorbar = list(title=leg_title),
+                  colorscale = list(thresholds_colors = seq(0, 1, length = 6),
+                  colors = c('gray','blue','skyblue','green','yellow','red')),
+                  showscale=TRUE) %>%
       layout(title = list(text = readNWISsite(input$site)$station_nm,x=0.47, y=0.92),
              scene=list(
                yaxis=list(title='Year',dtick=5),
-               zaxis = list(title = paste0(names(renameNWISColumns(usgs.data()))[4],
-                                           " (",readNWISpCode(substring(input$pCode,1,5))$parameter_units,")")),
-               xaxis = list(title = 'Month',autorange="reversed",
+               zaxis = list(title = leg_title),
+               xaxis = list(title = 'Month', autorange="reversed",
                             tickvals = seq(1, 366, by = 30.5),
                             ticktext = tck_mo),
                camera = list(eye = list(x = 1.3, y = 1.3, z = 1.5))))
+    
   })
   
   # Define the URL to use display the USGS website based on user site input:
@@ -326,8 +327,11 @@ This could be due to:
   # Use USGS site info function to get location for each of the sites that match
   # the state and parameter code defined by the user:
   map.sites <- eventReactive(input$load, {
-    state_sites <- whatNWISsites(stateCd = input$state,
-                                 parameterCd = substr(input$pCode,1,5))
+    state_sites <- whatNWISdata(siteNumbers = whatNWISsites(stateCd = input$state,
+                          parameterCd = substr(input$pCode,1,5))$site_no,
+                          parameterCd=substr(input$pCode,1,5),
+                          service = ifelse(input$type == 'daily','dv','uv'))
+    
     sf_points <- st_as_sf(state_sites,
                           coords = c("dec_long_va", "dec_lat_va"),
                           crs = 4269)
@@ -336,18 +340,20 @@ This could be due to:
   # Display the map on the map tab:
   output$map <- renderLeaflet({
     leaflet(map.sites()) %>%
-      addProviderTiles(providers$Stamen.TonerLite,
+      addProviderTiles(providers$Esri.WorldImagery,
                        options = providerTileOptions(noWrap = TRUE)) %>%
       addMarkers(clusterOptions = markerClusterOptions(zoomToBoundsOnClick = T), 
                  popup = ~paste(
                    paste('<b>', 'ID:', '</b>', site_no), 
-                   paste('<b>',  'Station Name:', '</b>', station_nm),
+                   paste('<b>', 'Station Name:', '</b>', station_nm), 
+                   paste('<b>', 'Parameter:', '</b>', subset(codesD, substr(codesD,1,5) == parm_cd[1])),
+                   paste('<b>', 'Data Type:', '</b>', ifelse(data_type_cd[1] == 'dv',"Daily","Real Time (15-minute)")),
+                   paste('<b>', 'Start Date:', '</b>', begin_date),
+                   paste('<b>', 'End Date:', '</b>', end_date),
                    sep = '<br/>'),
                  popupOptions = popupOptions(closeButton = FALSE))
   })
-  
-  
+  outputOptions(output, "map", suspendWhenHidden = FALSE)
 }
-
 
 shinyApp(ui, server)
