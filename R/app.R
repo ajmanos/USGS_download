@@ -50,7 +50,8 @@ ui <- fluidPage(
       tags$head(
         tags$style(HTML('.shiny-output-error-validation {
         color: red;
-        font-weight: bold;}'
+        font-weight: bold;
+        font-size: 20px}'
       ))
     ),
       
@@ -117,16 +118,21 @@ ui <- fluidPage(
          code("dataRetrieval"),
          "R package developed by the USGS. Please visit the USGS",
          a("blog post",
-           href = "https://waterdata.usgs.gov/blog/dataretrieval/"),
+           href = "https://waterdata.usgs.gov/blog/dataretrieval/",target = '_blank'),
          "for more information."),
       
     ),
+
     
     # Display tabs for table of data, plot of data, and map of USGS sites:
     mainPanel(
       tabsetPanel(type = "tabs",
                   tabPanel("Site Data", tableOutput("table") %>% withSpinner(color="blue")),
-                  tabPanel("Site Info", dataTableOutput("infoTable") %>% withSpinner(color="blue")),
+                  tabPanel("Site Info", span("▆",style = "color:lightgreen"),"= Supported data type",
+                  #textOutput("box"), textOutput("support"),
+                           # tags$head(tags$style("#box{ font-size: 25px; color: lightgreen")),
+                           # tags$head(tags$style("#support{ font-size: 25px")),
+                           dataTableOutput("infoTable") %>% withSpinner(color="blue")),
                   tabPanel("Linear Time Series", plotlyOutput("ts_line") %>% withSpinner(color="blue")),
                   tabPanel("3D Time Series", plotlyOutput("ts_3d") %>% withSpinner(color="blue")),
                   tabPanel('Map', leafletOutput('map',height = 900) %>% 
@@ -137,7 +143,8 @@ ui <- fluidPage(
                            h4(strong('Step 1: Select a State')),
                            tags$li("Use the drop down menu to select a state of
                                     interest."),
-                           tags$li("Click the 'Map' tab to view sites available for selected parameter code."),
+                           tags$li("Click the 'Refresh Map' button on the side panel then click the 'Map' tab 
+                                   to view sites available for selected parameter code."),
                            tags$li(strong('*Note: State selection only used for viewing sites in the map tab.
                                        State selection will not impact other parameters.')),
 
@@ -206,6 +213,8 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
 
+
+  
   usgsData <- eventReactive(input$load, {
     validate(need(nchar(input$site) >= 8, "Error: Site number must be at least 8 digits."))
     validate(need(nchar(input$site) <= 15, "Error: Site number must be less than 15 digits."))
@@ -235,15 +244,7 @@ server <- function(input, output, session) {
   # Generate table of data and display on screen:
   output$table <- renderTable({
     tbl <- usgsData()
-    validate(
-      need(nrow(tbl) > 0,"No data available.
-      
-    This could be due to:
-          1) Incorrect site number
-          2) Parameter code not available at site
-          3) Stat code not available at site
-          4) Data type is 'Daily' while date range is set for same date"))
-    
+    validate(need(nrow(tbl) > 0,"No data available. Check site number."))
     tbl
   })
   
@@ -251,6 +252,9 @@ server <- function(input, output, session) {
 
 
   siteInfo <- eventReactive(input$load, {
+    validate(need(nchar(input$site) >= 8, "Error: Site number must be at least 8 digits."))
+    validate(need(nchar(input$site) <= 15, "Error: Site number must be less than 15 digits."))
+    validate(need(!is.na(as.numeric(input$site)), "Error: Invalid site number, only numbers are accepted."))
     
     siteData <- whatNWISdata(siteNumber = input$site)
     
@@ -286,7 +290,8 @@ server <- function(input, output, session) {
 
   # Generate table of data and display on screen:
   output$infoTable <- renderDataTable(
-    datatable(siteInfo()) %>%
+    # validate(need(nrow(tbl) > 0,"No data available. Check site number."))
+    datatable(siteInfo(),options = list(iDisplayLength = 25)) %>%
       formatStyle(' ',
                   target = 'row',
                   backgroundColor = styleEqual(as.numeric(rownames(siteInfo()[siteInfo()$`Parameter Code` 
