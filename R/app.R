@@ -59,7 +59,7 @@ ui <- fluidPage(
   
       # State:
       selectInput('state', label = strong('State'),
-                  choices = state.name, selected = 'Florida'),
+                  choices = state.name),
       
       # Parameter code:
       selectizeInput(inputId = 'pCode',
