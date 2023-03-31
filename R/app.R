@@ -53,8 +53,7 @@ ui <- fluidPage(
         tags$style(HTML('.shiny-output-error-validation {
         color: red;
         font-weight: bold;
-        font-size: 20px}'
-      ))
+        font-size: 20px}'))
     ),
   
       # State:
@@ -69,8 +68,8 @@ ui <- fluidPage(
                      choices = codesFmt,
                      selected = '00060 (Discharge, cubic feet per second)'),
     
-    # Data type:
-    selectInput("type", label = strong("Data type"), 
+      # Data type:
+      selectInput("type", label = strong("Data type"), 
                 choices = c("Daily" = 'daily',
                             "Continuous" = 'continuous'), 
                 selected = 'Daily'),
@@ -123,7 +122,7 @@ ui <- fluidPage(
     # Generate tabs for site data/info, plots, map, and app instructions:
     mainPanel(
       tabsetPanel(type = "tabs",
-                  tabPanel("Site Data", tableOutput("table") %>% withSpinner(color="blue")),
+                  tabPanel("Site Data", tableOutput("raw") %>% withSpinner(color="blue")),
                   tabPanel("Site Info", span("▆",style = "color:lightgreen"),"= Supported data type",
                            dataTableOutput("infoTable") %>% withSpinner(color="blue")),
                   tabPanel("Linear Time Series", plotlyOutput("ts_line") %>% withSpinner(color="blue")),
@@ -226,10 +225,10 @@ server <- function(input, output, session) {
   })
   
   # Generate table of data:
-  output$table <- renderTable({
-    tbl <- usgs.data()
-    shiny::validate(need(nrow(tbl) > 0,"No data available. Check site number."))
-    tbl
+  output$raw <- renderTable({
+    raw <- usgs.data()
+    shiny::validate(need(nrow(raw) > 0,"No data available. Check site number."))
+    raw
   })
 
   # Get available site data:
@@ -237,7 +236,8 @@ server <- function(input, output, session) {
     shiny::validate(need(nchar(input$site) >= 8, "Error: Site number must be at least 8 digits."))
     shiny::validate(need(nchar(input$site) <= 15, "Error: Site number must be less than 15 digits."))
     shiny::validate(need(!is.na(as.numeric(input$site)), "Error: Invalid site number, only numbers are accepted."))
-    siteData <- whatNWISdata(siteNumber = input$site)
+    siteData <- tryCatch(whatNWISdata(siteNumber = input$site), error = function(e) e)
+    shiny::validate(need(length(siteData)>2, "No data available. Check site number."))
     for (i in 1:nrow(siteData)){
       if (!is.na(siteData$parm_cd[i])){
         siteData$desc[i] <- readNWISpCode(siteData$parm_cd[i])$parameter_nm
@@ -245,7 +245,7 @@ server <- function(input, output, session) {
         siteData$desc[i] <- NA
       }
     }
-    siteData2 <- data.frame(siteData$site_no, 
+    siteDF <- data.frame(siteData$site_no, 
                             siteData$station_nm,
                             siteData$parm_cd,
                             siteData$desc, 
@@ -253,28 +253,28 @@ server <- function(input, output, session) {
                             siteData$stat_cd,
                             as.character(siteData$begin_date),
                             as.character(siteData$end_date)) %>% arrange(siteData.parm_cd)
-    colnames(siteData2) <- c("Site Number","Station Name","Parameter Code","Description",
+    colnames(siteDF) <- c("Site Number","Station Name","Parameter Code","Description",
                              "Data Type", "Stat Code", "Start Date","End Date")
-    siteData2$`Data Type` <- ifelse(siteData2$`Data Type` == 'dv', 'Daily',
-                              ifelse(siteData2$`Data Type` == 'uv', 'Continuous',
-                               ifelse(siteData2$`Data Type` == 'qw', 'Water Quality',
-                                ifelse(siteData2$`Data Type` == 'sv', 'Site Visits',
-                                 ifelse(siteData2$`Data Type` == 'ad', 'USGS Annual Water Report',
-                                  ifelse(siteData2$`Data Type` == 'pk', 'Peak Flow',
-                                   ifelse(siteData2$`Data Type` == 'aw', 'Groundwater Level',
-                                    ifelse(siteData2$`Data Type` == 'id', 'Historical Instantaneous',""))))))))
-    return(siteData2)
+    siteDF$`Data Type` <- ifelse(siteDF$`Data Type` == 'dv', 'Daily',
+                              ifelse(siteDF$`Data Type` == 'uv', 'Continuous',
+                               ifelse(siteDF$`Data Type` == 'qw', 'Water Quality',
+                                ifelse(siteDF$`Data Type` == 'sv', 'Site Visits',
+                                 ifelse(siteDF$`Data Type` == 'ad', 'USGS Annual Water Report',
+                                  ifelse(siteDF$`Data Type` == 'pk', 'Peak Flow',
+                                   ifelse(siteDF$`Data Type` == 'aw', 'Groundwater Level',
+                                    ifelse(siteDF$`Data Type` == 'id', 'Historical Instantaneous',""))))))))
+    return(siteDF)
   })
 
   # Generate table of available site data:
-  output$infoTable <- renderDataTable(
-#   shiny::validate(need(nrow(tbl) > 0,"No data available. Check site number.")),
+  output$infoTable <- renderDataTable({
     datatable(site.info(),options = list(iDisplayLength = 25)) %>%
       formatStyle(' ',target = 'row',
                   backgroundColor = styleEqual(as.numeric(rownames(
                                           site.info()[site.info()$`Parameter Code` 
                                             %in% codeList & site.info()$`Data Type` 
-                                            %in% typeSupp,])), 'lightgreen')))
+                                            %in% typeSupp,])), 'lightgreen'))
+    })
 
   # Allow user to download data and give file descriptive name:
   output$downloadData <- downloadHandler(
