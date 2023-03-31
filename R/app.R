@@ -143,7 +143,7 @@ ui <- fluidPage(
                            tags$li(strong('*Note: State selection only used for viewing sites in the map tab.
                                        State selection will not impact other parameters.')),
                            br(),
-                           h4(strong('Step 2: Input Parameter Code')),
+                           h4(strong('Step 2: Select Parameter Code')),
                            tags$li("Use the dropdown menu to select a", code('Parameter Code'),
                                  "or enter a code/description in the parameter code box."),
                            tags$li("Clicking the",code('Parameter Code'),"name will open the
