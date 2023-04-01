@@ -28,7 +28,7 @@ library(tidyverse)
 # Only using a subset of parameter codes available as loading in all 24,898 codes
 # significantly slows app functionality. More codes can be added upon request.
 codeList <- c('00010', '00045', '00060', '00065', '00095', '00300', '00400',
-               '00480', '63160', '72254', '99133')
+              '00480', '63160', '72254', '99133')
 codePull <- readNWISpCode(codeList)
 
 # Dataframe needed for site info tab formatting:
@@ -54,8 +54,8 @@ ui <- fluidPage(
         color: red;
         font-weight: bold;
         font-size: 20px}'))
-    ),
-  
+      ),
+      
       # State:
       selectInput('state', label = strong('State'),
                   choices = state.name),
@@ -67,12 +67,12 @@ ui <- fluidPage(
                                target = '_blank'),
                      choices = codesFmt,
                      selected = '00060 (Discharge, cubic feet per second)'),
-    
+      
       # Data type:
       selectInput("type", label = strong("Data type"), 
-                choices = c("Daily" = 'daily',
-                            "Continuous" = 'continuous'), 
-                selected = 'Daily'),
+                  choices = c("Daily" = 'daily',
+                              "Continuous" = 'continuous'), 
+                  selected = 'Daily'),
       
       # Display link for site info from USGS website:
       strong(htmlOutput("selected_site",container=span)),
@@ -98,13 +98,13 @@ ui <- fluidPage(
       
       br(),
       br(),
-    
+      
       # Map refresh button:
       actionButton("map_load", label = "Refresh Map", class = "btn-success",
-                 icon = icon("refresh")),
-
+                   icon = icon("refresh")),
+      
       hr(),
-    
+      
       # Download data button:
       downloadButton("downloadData", "Download Data"),
       
@@ -135,7 +135,7 @@ ui <- fluidPage(
                            tags$li("Use the drop down menu to select a state of
                                     interest."),
                            tags$li("Navigate to the",code('Map'), "tab, then click  the", code('Refresh Map'),
-                                    "button on the side panel to view sites available for selected 
+                                   "button on the side panel to view sites available for selected 
                                    parameter code."),
                            tags$li("To view sites with different parameters available, select an
                                    option from the", code('Parameter Code'), "drop down menu, then click", code('Refresh Map'),"."),
@@ -144,7 +144,7 @@ ui <- fluidPage(
                            br(),
                            h4(strong('Step 2: Select Parameter Code')),
                            tags$li("Use the dropdown menu to select a", code('Parameter Code'),
-                                 "or enter a code/description in the parameter code box."),
+                                   "or enter a code/description in the parameter code box."),
                            tags$li("Clicking the",code('Parameter Code'),"name will open the
                                    USGS page of available parameter codes and information."),
                            tags$li(strong("*Note: Not all parameters codes are available for
@@ -169,7 +169,7 @@ ui <- fluidPage(
                            tags$li("Using the", code('Stat Code'), "drop down menu, select the statistic to be
                                  applied to the data."),
                            tags$li("To view available stat codes, load site data and click the", code('Site Info'),
-                                 "tab for possible parameter/stat codes, data types, and date ranges."),
+                                   "tab for possible parameter/stat codes, data types, and date ranges."),
                            br(),
                            h4(strong("Step 6: Select Date Range")),
                            tags$li("Select a start and end date from the", code('Date Range'), "boxes."),
@@ -203,10 +203,10 @@ server <- function(input, output, session) {
     shiny::validate(need(input$dates[1] < input$dates[2], "Error: Start date must be less than end date."))
     if (input$type == 'daily') {
       fDat <- readNWISdv(siteNumbers = input$site,
-                        parameterCd = substr(input$pCode, 1,5),
-                        statCd = substr(input$stat, 1,5),
-                        startDate = input$dates[1],
-                        endDate = input$dates[2])
+                         parameterCd = substr(input$pCode, 1,5),
+                         statCd = substr(input$stat, 1,5),
+                         startDate = input$dates[1],
+                         endDate = input$dates[2])
       fDat$Date <- as.character(fDat$Date)
       fDat <- renameNWISColumns(fDat)
       return(fDat)
@@ -214,10 +214,10 @@ server <- function(input, output, session) {
     if (input$type == 'continuous') {
       tz <- readNWISsite(input$site)$tz_cd
       fDat <- readNWISuv(siteNumbers = input$site,
-                        parameterCd = substr(input$pCode, 1,5),
-                        startDate = input$dates[1],
-                        endDate = input$dates[2],
-                        tz = ifelse(tz =='EST', 'America/New_York', tz))
+                         parameterCd = substr(input$pCode, 1,5),
+                         startDate = input$dates[1],
+                         endDate = input$dates[2],
+                         tz = ifelse(tz =='EST', 'America/New_York', tz))
       fDat$dateTime <- as.character(fDat$dateTime)
       fDat <- renameNWISColumns(fDat)
       return(fDat)
@@ -230,7 +230,7 @@ server <- function(input, output, session) {
     shiny::validate(need(nrow(raw) > 0,"No data available. Check site number."))
     raw
   })
-
+  
   # Get available site data:
   site.info <- eventReactive(input$load, {
     shiny::validate(need(nchar(input$site) >= 8, "Error: Site number must be at least 8 digits."))
@@ -246,36 +246,36 @@ server <- function(input, output, session) {
       }
     }
     siteDF <- data.frame(siteData$site_no, 
-                            siteData$station_nm,
-                            siteData$parm_cd,
-                            siteData$desc, 
-                            siteData$data_type_cd,
-                            siteData$stat_cd,
-                            as.character(siteData$begin_date),
-                            as.character(siteData$end_date)) %>% arrange(siteData.parm_cd)
+                         siteData$station_nm,
+                         siteData$parm_cd,
+                         siteData$desc, 
+                         siteData$data_type_cd,
+                         siteData$stat_cd,
+                         as.character(siteData$begin_date),
+                         as.character(siteData$end_date)) %>% arrange(siteData.parm_cd)
     colnames(siteDF) <- c("Site Number","Station Name","Parameter Code","Description",
-                             "Data Type", "Stat Code", "Start Date","End Date")
+                          "Data Type", "Stat Code", "Start Date","End Date")
     siteDF$`Data Type` <- ifelse(siteDF$`Data Type` == 'dv', 'Daily',
-                              ifelse(siteDF$`Data Type` == 'uv', 'Continuous',
-                               ifelse(siteDF$`Data Type` == 'qw', 'Water Quality',
-                                ifelse(siteDF$`Data Type` == 'sv', 'Site Visits',
-                                 ifelse(siteDF$`Data Type` == 'ad', 'USGS Annual Water Report',
-                                  ifelse(siteDF$`Data Type` == 'pk', 'Peak Flow',
-                                   ifelse(siteDF$`Data Type` == 'aw', 'Groundwater Level',
-                                    ifelse(siteDF$`Data Type` == 'id', 'Historical Instantaneous',""))))))))
+                                 ifelse(siteDF$`Data Type` == 'uv', 'Continuous',
+                                        ifelse(siteDF$`Data Type` == 'qw', 'Water Quality',
+                                               ifelse(siteDF$`Data Type` == 'sv', 'Site Visits',
+                                                      ifelse(siteDF$`Data Type` == 'ad', 'USGS Annual Water Report',
+                                                             ifelse(siteDF$`Data Type` == 'pk', 'Peak Flow',
+                                                                    ifelse(siteDF$`Data Type` == 'aw', 'Groundwater Level',
+                                                                           ifelse(siteDF$`Data Type` == 'id', 'Historical Instantaneous',""))))))))
     return(siteDF)
   })
-
+  
   # Generate table of available site data:
   output$infoTable <- renderDataTable({
     datatable(site.info(),options = list(iDisplayLength = 25)) %>%
       formatStyle(' ',target = 'row',
                   backgroundColor = styleEqual(as.numeric(rownames(
-                                          site.info()[site.info()$`Parameter Code` 
-                                            %in% codeList & site.info()$`Data Type` 
-                                            %in% typeSupp,])), 'lightgreen'))
-    })
-
+                    site.info()[site.info()$`Parameter Code` 
+                                %in% codeList & site.info()$`Data Type` 
+                                %in% typeSupp,])), 'lightgreen'))
+  })
+  
   # Allow user to download data and give file descriptive name:
   output$downloadData <- downloadHandler(
     filename = function(){paste0('USGS_',input$site,'_', names(renameNWISColumns(usgs.data()))[4], "_",
@@ -291,51 +291,52 @@ server <- function(input, output, session) {
       add_trace(x = if (input$type == 'daily') ~Date else ~dateTime,
                 y = ~usgs.data()[,4], line=list(color='darkblue')) %>%
       layout(title = list(text = readNWISsite(input$site)$station_nm),
-        showlegend = FALSE, yaxis = list(title = str_sub(input$pCode,8,-2)))
+             showlegend = FALSE, yaxis = list(title = str_sub(input$pCode,8,-2)))
   })
-
+  
   # Generate 3D plot of output table:
   output$ts_3d <- renderPlotly({
     #TODO: 3d time series for continuous data
     shiny::validate(need(names(usgs.data()[3]) == 'Date', "3D time series plot does not currently support continuous data."))
-    FlowMatrix <- data.frame(Day = yday(usgs.data()$Date), Year = year(usgs.data()$Date), Var = usgs.data()[,4])
-    var_mat <- as.matrix(rasterFromXYZ(FlowMatrix))
-    rownames(var_mat) <- rev(seq(min(FlowMatrix$Year),max(FlowMatrix$Year),1))
-    y <- as.numeric(rownames(var_mat))
-    tck_num <- round(seq(1, 366, by = 30.5))
-    tck_mo <- month.abb[parse_date_time(tck_num, orders = "j") %>%
-      month()]
+    FlowMatrix        <- data.frame(Day = yday(usgs.data()$Date), 
+                                    Year = year(usgs.data()$Date), Var = usgs.data()[,4])
+    varMat           <- as.matrix(rasterFromXYZ(FlowMatrix))
+    rownames(varMat) <- rev(seq(min(FlowMatrix$Year),max(FlowMatrix$Year),1))
+    y                 <- as.numeric(rownames(varMat))
+    tckNum           <- round(seq(1, 366, by = 30.5))
+    tckMo            <- month.abb[parse_date_time(tckNum, orders = "j") %>%
+                          month()]
 
-    leg_title <- paste0(names(renameNWISColumns(usgs.data()))[4],
-                 " (",readNWISpCode(substring(input$pCode,1,5))$parameter_units,")")
-
+    legTitle <- paste0(names(renameNWISColumns(usgs.data()))[4],
+                        " (",readNWISpCode(substring(input$pCode,1,5))$parameter_units,")")
+    
     plot_ly(height = 900) %>%
-      add_surface(z = var_mat,
+      add_surface(z = varMat,
                   y = y,
-                  colorbar = list(title=leg_title),
+                  colorbar = list(title=legTitle),
                   colorscale = list(thresholds_colors = seq(0, 1, length = 6),
-                  colors = c('gray','blue','skyblue','green','yellow','red')),
+                                    colors = c('gray','blue','skyblue','green','yellow','red')),
                   showscale=TRUE) %>%
       layout(title = list(text = readNWISsite(input$site)$station_nm,x=0.47, y=0.92),
              scene=list(
                yaxis=list(title='Year',dtick=5),
-               zaxis = list(title = leg_title),
+               zaxis = list(title = legTitle),
                xaxis = list(title = 'Month', autorange="reversed",
                             tickvals = seq(1, 366, by = 30.5),
-                            ticktext = tck_mo),
+                            ticktext = tckMo),
                camera = list(eye = list(x = 1.3, y = 1.3, z = 1.5))))
-
+    
   })
-
+  
   # Define the URL to use display the USGS website based on user site input:
   site.url <- eventReactive(input$load, {
     paste0('https://waterdata.usgs.gov/monitoring-location/',input$site,'/')
   })
-
+  
   # Generate hyperlink text from user site input that goes to USGS site:
   output$selected_site <- renderUI(a("Site Info", target="_blank", href = site.url()
   ))
-
+  
   # Use USGS site info function to get location for each of the sites that match
   # the state and parameter code defined by the user:
   map.sites <- eventReactive(input$map_load, {
@@ -345,8 +346,8 @@ server <- function(input, output, session) {
     state_data <- whatNWISdata(siteNumbers = state_sites$site_no,
                                service = ifelse(input$type == 'daily','dv','uv'), 
                                parameterCd = substr(input$pCode,1,5))
-
-
+    
+    
     sf_points <- st_as_sf(state_data,
                           coords = c("dec_long_va", "dec_lat_va")) 
   })
