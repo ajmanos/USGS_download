@@ -256,13 +256,13 @@ server <- function(input, output, session) {
     colnames(siteDF) <- c("Site Number","Station Name","Parameter Code","Description",
                           "Data Type", "Stat Code", "Start Date","End Date")
     siteDF$`Data Type` <- ifelse(siteDF$`Data Type` == 'dv', 'Daily',
-                                 ifelse(siteDF$`Data Type` == 'uv', 'Continuous',
-                                        ifelse(siteDF$`Data Type` == 'qw', 'Water Quality',
-                                               ifelse(siteDF$`Data Type` == 'sv', 'Site Visits',
-                                                      ifelse(siteDF$`Data Type` == 'ad', 'USGS Annual Water Report',
-                                                             ifelse(siteDF$`Data Type` == 'pk', 'Peak Flow',
-                                                                    ifelse(siteDF$`Data Type` == 'aw', 'Groundwater Level',
-                                                                           ifelse(siteDF$`Data Type` == 'id', 'Historical Instantaneous',""))))))))
+                           ifelse(siteDF$`Data Type` == 'uv', 'Continuous',
+                            ifelse(siteDF$`Data Type` == 'qw', 'Water Quality',
+                             ifelse(siteDF$`Data Type` == 'sv', 'Site Visits',
+                              ifelse(siteDF$`Data Type` == 'ad', 'USGS Annual Water Report',
+                               ifelse(siteDF$`Data Type` == 'pk', 'Peak Flow',
+                                ifelse(siteDF$`Data Type` == 'aw', 'Groundwater Level',
+                                 ifelse(siteDF$`Data Type` == 'id', 'Historical Instantaneous',""))))))))
     return(siteDF)
   })
   
