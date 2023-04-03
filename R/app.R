@@ -203,8 +203,8 @@ server <- function(input, output, session) {
     shiny::validate(need(input$dates[1] < input$dates[2], "Error: Start date must be less than end date."))
     if (input$type == 'daily') {
       fDat <- readNWISdv(siteNumbers = input$site,
-                         parameterCd = substr(input$pCode, 1,5),
-                         statCd = substr(input$stat, 1,5),
+                         parameterCd = substr(input$pCode, 1, 5),
+                         statCd = substr(input$stat, 1, 5),
                          startDate = input$dates[1],
                          endDate = input$dates[2])
       fDat$Date <- as.character(fDat$Date)
@@ -214,7 +214,7 @@ server <- function(input, output, session) {
     if (input$type == 'continuous') {
       tz <- readNWISsite(input$site)$tz_cd
       fDat <- readNWISuv(siteNumbers = input$site,
-                         parameterCd = substr(input$pCode, 1,5),
+                         parameterCd = substr(input$pCode, 1, 5),
                          startDate = input$dates[1],
                          endDate = input$dates[2],
                          tz = ifelse(tz =='EST', 'America/New_York', tz))
@@ -227,7 +227,7 @@ server <- function(input, output, session) {
   # Generate table of data:
   output$raw <- renderTable({
     raw <- usgs.data()
-    shiny::validate(need(nrow(raw) > 0,"No data available. Check site number."))
+    shiny::validate(need(nrow(raw) > 0, "No data available. Check site number."))
     raw
   })
   
@@ -262,14 +262,14 @@ server <- function(input, output, session) {
                               ifelse(siteDF$`Data Type` == 'ad', 'USGS Annual Water Report',
                                ifelse(siteDF$`Data Type` == 'pk', 'Peak Flow',
                                 ifelse(siteDF$`Data Type` == 'aw', 'Groundwater Level',
-                                 ifelse(siteDF$`Data Type` == 'id', 'Historical Instantaneous',""))))))))
+                                 ifelse(siteDF$`Data Type` == 'id', 'Historical Instantaneous', ""))))))))
     return(siteDF)
   })
   
   # Generate table of available site data:
   output$infoTable <- renderDataTable({
-    datatable(site.info(),options = list(iDisplayLength = 25)) %>%
-      formatStyle(' ',target = 'row',
+    datatable(site.info(), options = list(iDisplayLength = 25)) %>%
+      formatStyle(' ', target = 'row',
                   backgroundColor = styleEqual(as.numeric(rownames(
                     site.info()[site.info()$`Parameter Code` 
                                 %in% codeList & site.info()$`Data Type` 
@@ -278,9 +278,9 @@ server <- function(input, output, session) {
   
   # Allow user to download data and give file descriptive name:
   output$downloadData <- downloadHandler(
-    filename = function(){paste0('USGS_',input$site,'_', names(renameNWISColumns(usgs.data()))[4], "_",
-                                 input$type,'_',min(year(usgs.data()[,3])),'_',
-                                 max(year(usgs.data()[,3])),'.xlsx')},
+    filename = function(){paste0('USGS_', input$site, '_', names(renameNWISColumns(usgs.data()))[4], "_",
+                                 input$type, '_', min(year(usgs.data()[,3])), '_',
+                                 max(year(usgs.data()[,3])), '.xlsx')},
     content = function(fname) {
       write_xlsx(usgs.data(),fname)
     })
@@ -298,30 +298,30 @@ server <- function(input, output, session) {
   output$ts_3d <- renderPlotly({
     #TODO: 3d time series for continuous data
     shiny::validate(need(names(usgs.data()[3]) == 'Date', "3D time series plot does not currently support continuous data."))
-    FlowMatrix        <- data.frame(Day = yday(usgs.data()$Date), 
+    FlowMatrix       <- data.frame(Day = yday(usgs.data()$Date), 
                                     Year = year(usgs.data()$Date), Var = usgs.data()[,4])
     varMat           <- as.matrix(rasterFromXYZ(FlowMatrix))
-    rownames(varMat) <- rev(seq(min(FlowMatrix$Year),max(FlowMatrix$Year),1))
-    y                 <- as.numeric(rownames(varMat))
+    rownames(varMat) <- rev(seq(min(FlowMatrix$Year), max(FlowMatrix$Year), 1))
+    y                <- as.numeric(rownames(varMat))
     tckNum           <- round(seq(1, 366, by = 30.5))
     tckMo            <- month.abb[parse_date_time(tckNum, orders = "j") %>%
                           month()]
 
     legTitle <- paste0(names(renameNWISColumns(usgs.data()))[4],
-                        " (",readNWISpCode(substring(input$pCode,1,5))$parameter_units,")")
+                        " (", readNWISpCode(substring(input$pCode, 1, 5))$parameter_units, ")")
     
     plot_ly(height = 900) %>%
       add_surface(z = varMat,
                   y = y,
-                  colorbar = list(title=legTitle),
+                  colorbar = list(title = legTitle),
                   colorscale = list(thresholds_colors = seq(0, 1, length = 6),
-                                    colors = c('gray','blue','skyblue','green','yellow','red')),
-                  showscale=TRUE) %>%
-      layout(title = list(text = readNWISsite(input$site)$station_nm,x=0.47, y=0.92),
+                                    colors = c('gray', 'blue', 'skyblue', 'green', 'yellow', 'red')),
+                  showscale = TRUE) %>%
+      layout(title = list(text = readNWISsite(input$site)$station_nm,x = 0.47, y = 0.92),
              scene=list(
-               yaxis=list(title='Year',dtick=5),
+               yaxis = list(title = 'Year', dtick = 5),
                zaxis = list(title = legTitle),
-               xaxis = list(title = 'Month', autorange="reversed",
+               xaxis = list(title = 'Month', autorange = "reversed",
                             tickvals = seq(1, 366, by = 30.5),
                             ticktext = tckMo),
                camera = list(eye = list(x = 1.3, y = 1.3, z = 1.5))))
@@ -346,7 +346,6 @@ server <- function(input, output, session) {
     state_data <- whatNWISdata(siteNumbers = state_sites$site_no,
                                service = ifelse(input$type == 'daily','dv','uv'), 
                                parameterCd = substr(input$pCode,1,5))
-    
     
     sf_points <- st_as_sf(state_data,
                           coords = c("dec_long_va", "dec_lat_va")) 
