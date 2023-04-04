@@ -20,6 +20,7 @@ library(tidyverse)
 # 00300 = Dissolved Oxygen (mg/L)
 # 00400 = pH
 # 00480 = Salinity (ppt)
+# 00666 = Phosphorus (mg/L-P)
 # 63160 = Stream water level abov NAVD 1988 (ft)
 # 72254 = Water Velocity (ft/s)
 # 99133 = NO3 + NO2 (mg/L-N)
@@ -28,7 +29,7 @@ library(tidyverse)
 # Only using a subset of parameter codes available as loading in all 24,898 codes
 # significantly slows app functionality. More codes can be added upon request.
 codeList <- c('00010', '00045', '00060', '00065', '00095', '00300', '00400',
-              '00480', '63160', '72254', '99133')
+              '00480', '00666', '63160', '72254', '99133')
 codePull <- readNWISpCode(codeList)
 
 # Dataframe needed for site info tab formatting:
@@ -38,7 +39,7 @@ codeDat <- data.frame(codes = codePull$parameter_cd, desc = codePull$parameter_n
 codesFmt <- paste0(codePull$parameter_cd, ' (', codePull$parameter_nm, ')')
 
 # Supported data types:
-typeSupp <- c('Daily','Continuous')
+typeSupp <- c('Daily','Continuous', 'Water Quality')
 
 
 ui <- fluidPage(
@@ -70,9 +71,10 @@ ui <- fluidPage(
       
       # Data type:
       selectInput("type", label = strong("Data type"), 
-                  choices = c("Daily" = 'daily',
-                              "Continuous" = 'continuous'), 
-                  selected = 'Daily'),
+                  choices = c("Continuous" = 'continuous',
+                              "Daily" = 'daily',
+                              "Water Quality" = 'water_qual'), 
+                  selected = 'daily'),
       
       # Display link for site info from USGS website:
       strong(htmlOutput("selected_site",container=span)),
@@ -149,7 +151,7 @@ ui <- fluidPage(
                                    USGS page of available parameter codes and information."),
                            tags$li(strong("*Note: Not all parameters codes are available for
                                           selection as there are nearly 25,000 codes which would
-                                          slow operating speeds. Codes can be added by request to almanos@pinellas.gov.")),
+                                          slow operating speeds. Codes can be added by request to ajmanos1@gmail.com")),
                            br(),
                            h4(strong("Step 3: Select Data type")),
                            tags$li("Using the", code('Data type')," drop down
@@ -178,7 +180,7 @@ ui <- fluidPage(
                            tags$li("Click the", code('Load Data'), "button to load the data from the selected inputs."),
                            tags$li("The raw data will appear in the", code('Site Data'), "tab."),
                            tags$li(code('Site Info'), "will be updated whenever new site data is loaded."),
-                           h4(strong("Step 8: View Graphed Data")),
+                           h4(strong("Step 8: View Time Series")),
                            tags$li("Select the", code('Linear Time Series'), "tab to view a time series of the
                                  selected parameter."),
                            tags$li("Select the", code('3D Time Series'), "tab to view a 3D representation of the
@@ -222,6 +224,18 @@ server <- function(input, output, session) {
       fDat <- renameNWISColumns(fDat)
       return(fDat)
     }
+    if (input$type == 'water_qual') {
+      wqDat <- readWQPqw(siteNumbers = paste0('USGS-',input$site),
+                         parameterCd = substr(input$pCode, 1, 5),
+                         startDate = input$dates[1],
+                         endDate = input$dates[2])
+      wqDf <- data.frame(org_id = wqDat$OrganizationIdentifier, site_no = wqDat$MonitoringLocationIdentifier,
+                         Date = wqDat$ActivityStartDate,
+                         param= wqDat$ResultMeasureValue, units = wqDat$ResultMeasure.MeasureUnitCode)
+      wqDf$Date <- as.character(wqDf$Date)
+      colnames(wqDf)[4] <- wqDat$CharacteristicName[1]
+      return(wqDf[order(wqDf$Date),])
+    }
   })
   
   # Generate table of data:
@@ -252,9 +266,10 @@ server <- function(input, output, session) {
                          siteData$data_type_cd,
                          siteData$stat_cd,
                          as.character(siteData$begin_date),
-                         as.character(siteData$end_date)) %>% arrange(siteData.parm_cd)
+                         as.character(siteData$end_date),
+                         siteData$count_nu) %>% arrange(siteData.parm_cd)
     colnames(siteDF) <- c("Site Number","Station Name","Parameter Code","Description",
-                          "Data Type", "Stat Code", "Start Date","End Date")
+                          "Data Type", "Stat Code", "Start Date","End Date","n")
     siteDF$`Data Type` <- ifelse(siteDF$`Data Type` == 'dv', 'Daily',
                            ifelse(siteDF$`Data Type` == 'uv', 'Continuous',
                             ifelse(siteDF$`Data Type` == 'qw', 'Water Quality',
@@ -288,7 +303,7 @@ server <- function(input, output, session) {
   # Generate plot of output table:
   output$ts_line <- renderPlotly({
     plot_ly(usgs.data(), type = 'scatter', mode='lines',height=800) %>%
-      add_trace(x = if (input$type == 'daily') ~Date else ~dateTime,
+      add_trace(x = if (input$type == 'daily' | input$type == 'water_qual') ~Date else ~dateTime,
                 y = ~usgs.data()[,4], line=list(color='darkblue')) %>%
       layout(title = list(text = readNWISsite(input$site)$station_nm),
              showlegend = FALSE, yaxis = list(title = str_sub(input$pCode,8,-2)))
@@ -299,16 +314,16 @@ server <- function(input, output, session) {
     #TODO: 3d time series for continuous data
     shiny::validate(need(names(usgs.data()[3]) == 'Date', "3D time series plot does not currently support continuous data."))
     FlowMatrix       <- data.frame(Day = yday(usgs.data()$Date), 
-                                    Year = year(usgs.data()$Date), Var = usgs.data()[,4])
+                                   Year = year(usgs.data()$Date), Var = usgs.data()[,4])
     varMat           <- as.matrix(rasterFromXYZ(FlowMatrix))
     rownames(varMat) <- rev(seq(min(FlowMatrix$Year), max(FlowMatrix$Year), 1))
     y                <- as.numeric(rownames(varMat))
     tckNum           <- round(seq(1, 366, by = 30.5))
     tckMo            <- month.abb[parse_date_time(tckNum, orders = "j") %>%
-                          month()]
-
+                                    month()]
+    
     legTitle <- paste0(names(renameNWISColumns(usgs.data()))[4],
-                        " (", readNWISpCode(substring(input$pCode, 1, 5))$parameter_units, ")")
+                       " (", readNWISpCode(substring(input$pCode, 1, 5))$parameter_units, ")")
     
     plot_ly(height = 900) %>%
       add_surface(z = varMat,
@@ -356,6 +371,7 @@ server <- function(input, output, session) {
     leaflet(map.sites()) %>%
       addProviderTiles(providers$Esri.WorldImagery,
                        options = providerTileOptions(noWrap = TRUE)) %>%
+      addProviderTiles(providers$Stamen.TonerHybrid) %>%
       addMarkers(clusterOptions = markerClusterOptions(zoomToBoundsOnClick = TRUE),
                  popup = ~paste(
                    paste('<b>', 'ID:', '</b>', site_no),
