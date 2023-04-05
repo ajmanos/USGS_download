@@ -12,24 +12,37 @@ library(tidyverse)
 
 
 # List of codes:
+# 00004 = Stream width (ft)
 # 00010 = Water Temp (deg C) 
 # 00045 = Total Precipitation (in)
 # 00060 = Stream Flow (ft^3/s)
 # 00065 = Gage height (ft)
 # 00095 = Specific Conductance (uS/cm @ 25C)
 # 00300 = Dissolved Oxygen (mg/L)
-# 00400 = pH
+# 00300 = Dissolved Oxygen (% sat)
+# 00400 = pH (std unit)
 # 00480 = Salinity (ppt)
-# 00666 = Phosphorus (mg/L-P)
+# 00600 = Total N (unfiltered) (mg/L)
+# 00602 = Total N (filtered) (mg/L)
+# 00608 = Ammonia (mg/L-N)
+# 00613 = Nitrite (mg/L-N)
+# 00618 = Nitrate (mg/L-N)
+# 00631 = Nitrate + Nitrite (mg/L-N)
+# 00666 = Phosphorus (filtered) (mg/L-P)
+# 00674 = Orthophosphate (mg/L-P)
+# 00900 = Hardness (mg/L-CaCO3)
 # 63160 = Stream water level abov NAVD 1988 (ft)
 # 72254 = Water Velocity (ft/s)
+# 80154 = Suspended sediment (mg/L)
 # 99133 = NO3 + NO2 (mg/L-N)
 
 
 # Only using a subset of parameter codes available as loading in all 24,898 codes
 # significantly slows app functionality. More codes can be added upon request.
-codeList <- c('00010', '00045', '00060', '00065', '00095', '00300', '00400',
-              '00480', '00666', '63160', '72254', '99133')
+codeList <- c('00004', '00010', '00045', '00060', '00065', '00095', '00300', '00301', '00400',
+              '00480','00600','00602', '00608', '00613', '00618', '00631', '00671', '00666', '00900', '63160', 
+              '72254', '80154', '99133')
+
 codePull <- readNWISpCode(codeList)
 
 # Dataframe needed for site info tab formatting:
@@ -125,7 +138,8 @@ ui <- fluidPage(
     mainPanel(
       tabsetPanel(type = "tabs",
                   tabPanel("Site Data", tableOutput("raw") %>% withSpinner(color="blue")),
-                  tabPanel("Site Info", span("▆",style = "color:lightgreen"),"= Supported data type",
+                  tabPanel("Site Info", span("▆",style = "color:lightgreen; font-size: 28px"),
+                           span("= Supported data type", style = "font-weight:bold; font-size: 16px"),
                            dataTableOutput("infoTable") %>% withSpinner(color="blue")),
                   tabPanel("Linear Time Series", plotlyOutput("ts_line") %>% withSpinner(color="blue")),
                   tabPanel("3D Time Series", plotlyOutput("ts_3d") %>% withSpinner(color="blue")),
@@ -210,6 +224,10 @@ server <- function(input, output, session) {
                          startDate = input$dates[1],
                          endDate = input$dates[2])
       fDat$Date <- as.character(fDat$Date)
+      pc <- substr(names(fDat[4]),3,7)
+      shiny::validate(need(nrow(fDat) > 0, "Error: No data available. Check that all parameters are correctly enetered."))
+      fDat$units <- readNWISpCode(pc)$parameter_units
+      fDat$station_nm <- readNWISsite(input$site)$station_nm
       fDat <- renameNWISColumns(fDat)
       return(fDat)
     }
@@ -221,6 +239,10 @@ server <- function(input, output, session) {
                          endDate = input$dates[2],
                          tz = ifelse(tz =='EST', 'America/New_York', tz))
       fDat$dateTime <- as.character(fDat$dateTime)
+      pc <- substr(names(fDat[4]),3,7)
+      shiny::validate(need(nrow(fDat) > 0, "Error: No data available. Check that all parameters are correctly enetered."))
+      fDat$units <- readNWISpCode(pc)$parameter_units
+      fDat$station_nm <- readNWISsite(input$site)$station_nm
       fDat <- renameNWISColumns(fDat)
       return(fDat)
     }
@@ -229,20 +251,20 @@ server <- function(input, output, session) {
                          parameterCd = substr(input$pCode, 1, 5),
                          startDate = input$dates[1],
                          endDate = input$dates[2])
-      wqDf <- data.frame(org_id = wqDat$OrganizationIdentifier, site_no = wqDat$MonitoringLocationIdentifier,
-                         Date = wqDat$ActivityStartDate,
-                         param= wqDat$ResultMeasureValue, units = wqDat$ResultMeasure.MeasureUnitCode)
+      shiny::validate(need(nrow(wqDat) > 0, "Error: No data available. Check that all parameters are correctly enetered."))
+      wqDf <- data.frame(org_id = wqDat$OrganizationIdentifier, site_no = input$site,
+                         Date = wqDat$ActivityStartDate,param= wqDat$ResultMeasureValue, 
+                         units = wqDat$ResultMeasure.MeasureUnitCode)
       wqDf$Date <- as.character(wqDf$Date)
       colnames(wqDf)[4] <- wqDat$CharacteristicName[1]
+      wqDf$station_nm <- readNWISsite(input$site)$station_nm
       return(wqDf[order(wqDf$Date),])
     }
   })
   
   # Generate table of data:
   output$raw <- renderTable({
-    raw <- usgs.data()
-    shiny::validate(need(nrow(raw) > 0, "No data available. Check site number."))
-    raw
+    usgs.data()
   })
   
   # Get available site data:
@@ -268,8 +290,10 @@ server <- function(input, output, session) {
                          as.character(siteData$begin_date),
                          as.character(siteData$end_date),
                          siteData$count_nu) %>% arrange(siteData.parm_cd)
+    
     colnames(siteDF) <- c("Site Number","Station Name","Parameter Code","Description",
                           "Data Type", "Stat Code", "Start Date","End Date","n")
+    
     siteDF$`Data Type` <- ifelse(siteDF$`Data Type` == 'dv', 'Daily',
                            ifelse(siteDF$`Data Type` == 'uv', 'Continuous',
                             ifelse(siteDF$`Data Type` == 'qw', 'Water Quality',
@@ -300,7 +324,7 @@ server <- function(input, output, session) {
       write_xlsx(usgs.data(),fname)
     })
   
-  # Generate plot of output table:
+  # Generate time-series:
   output$ts_line <- renderPlotly({
     plot_ly(usgs.data(), type = 'scatter', mode='lines',height=800) %>%
       add_trace(x = if (input$type == 'daily' | input$type == 'water_qual') ~Date else ~dateTime,
@@ -309,7 +333,7 @@ server <- function(input, output, session) {
              showlegend = FALSE, yaxis = list(title = str_sub(input$pCode,8,-2)))
   })
   
-  # Generate 3D plot of output table:
+  # Generate 3D time-series:
   output$ts_3d <- renderPlotly({
     #TODO: 3d time series for continuous data
     shiny::validate(need(names(usgs.data()[3]) == 'Date', "3D time series plot does not currently support continuous data."))
@@ -343,17 +367,16 @@ server <- function(input, output, session) {
     
   })
   
-  # Define the URL to use display the USGS website based on user site input:
+  # Generate URL to the USGS website based on user site input:
   site.url <- eventReactive(input$load, {
     paste0('https://waterdata.usgs.gov/monitoring-location/',input$site,'/')
   })
   
-  # Generate hyperlink text from user site input that goes to USGS site:
+  # Display site URL to the USGS website:
   output$selected_site <- renderUI(a("Site Info", target="_blank", href = site.url()
   ))
   
-  # Use USGS site info function to get location for each of the sites that match
-  # the state and parameter code defined by the user:
+  # Get location of sites based on parameter code and data type:
   map.sites <- eventReactive(input$map_load, {
     state_sites <- whatNWISsites(stateCd = input$state, 
                                  parameterCd = substr(input$pCode,1,5))
@@ -374,7 +397,7 @@ server <- function(input, output, session) {
       addProviderTiles(providers$Stamen.TonerHybrid) %>%
       addMarkers(clusterOptions = markerClusterOptions(zoomToBoundsOnClick = TRUE),
                  popup = ~paste(
-                   paste('<b>', 'ID:', '</b>', site_no),
+                   paste('<b>', 'Station ID:', '</b>', site_no),
                    paste('<b>', 'Station Name:', '</b>', station_nm),
                    paste('<b>', 'Parameter:', '</b>', codesFmt[grep(parm_cd[1],codesFmt)]),
                    paste('<b>', 'Data Type:', '</b>', ifelse(data_type_cd[1] == 'dv',"Daily","Continuous (15-minute)")),
@@ -388,4 +411,4 @@ server <- function(input, output, session) {
   outputOptions(output, "map", suspendWhenHidden = FALSE)
 }
 
-shinyApp(ui, server)
+shinyApp(ui = ui, server = server)
