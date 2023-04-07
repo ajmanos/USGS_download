@@ -419,6 +419,7 @@ server <- function(input, output, session) {
   output$ts_3d <- renderPlotly({
     #TODO: 3d time series for continuous data
     shiny::validate(need(names(usgs.data()[3]) == 'Date', "3D time series plot does not currently support continuous data."))
+    shiny::validate(need(year(input$dates[2])-year(input$dates[1]) >= 2, "Need at least 2 years of data to generate 3D plot."))
     FlowMatrix       <- data.frame(Day = yday(usgs.data()$Date), 
                                    Year = year(usgs.data()$Date), Var = usgs.data()[,4])
     varMat           <- as.matrix(rasterFromXYZ(FlowMatrix))
