@@ -5,9 +5,10 @@ library(writexl)
 library(leaflet)
 library(sf)
 library(plotly)
-library(lubridate)
 library(raster)
 library(DT)
+library(psych)
+library(gt)
 library(tidyverse)
 
 
@@ -57,7 +58,7 @@ typeSupp <- c('Daily','Continuous', 'Water Quality')
 
 ui <- fluidPage(
   
-  titlePanel('USGS Downloader'),
+  titlePanel('USGS Data Explorer'),
   
   sidebarLayout(
     sidebarPanel(
@@ -102,7 +103,8 @@ ui <- fluidPage(
                               "00002 (Min)" = "00002",
                               "00003 (Mean)" = '00003',
                               "00006 (Sum)" = '00006',
-                              "00008 (Median)" = '00008'), 
+                              "00008 (Median)" = '00008',
+                              "00011 (Instantaneous)" = '00011'), 
                   selected = '00003'),
       
       # Date range:
@@ -138,6 +140,9 @@ ui <- fluidPage(
     mainPanel(
       tabsetPanel(type = "tabs",
                   tabPanel("Site Data", tableOutput("raw") %>% withSpinner(color="blue")),
+                  tabPanel("EDA", plotOutput('hist'), br(), br(), plotOutput('box'), 
+                           br(), br(), plotOutput('qq'), br(), br(), gt_output('sum'),
+                           br(), br(), gt_output('norm') %>% withSpinner(color = "blue")),
                   tabPanel("Site Info", span("▆",style = "color:lightgreen; font-size: 28px"),
                            span("= Supported data type", style = "font-weight:bold; font-size: 16px"),
                            dataTableOutput("infoTable") %>% withSpinner(color="blue")),
@@ -145,7 +150,7 @@ ui <- fluidPage(
                   tabPanel("3D Time Series", plotlyOutput("ts_3d") %>% withSpinner(color="blue")),
                   tabPanel('Map', leafletOutput('map',height = 900) %>% 
                              withSpinner(color="blue")),
-                  tabPanel("Instructions",  h3(strong('How to use USGS downloader')),
+                  tabPanel("Instructions",  h3(strong('How to use USGS Data Explorer')),
                            br(),
                            h4(strong('Step 1: Select a State')),
                            tags$li("Use the drop down menu to select a state of
@@ -194,11 +199,14 @@ ui <- fluidPage(
                            tags$li("Click the", code('Load Data'), "button to load the data from the selected inputs."),
                            tags$li("The raw data will appear in the", code('Site Data'), "tab."),
                            tags$li(code('Site Info'), "will be updated whenever new site data is loaded."),
-                           h4(strong("Step 8: View Time Series")),
+                           br(),
+                           h4(strong("Step 8: View Plots")),
                            tags$li("Select the", code('Linear Time Series'), "tab to view a time series of the
                                  selected parameter."),
                            tags$li("Select the", code('3D Time Series'), "tab to view a 3D representation of the
                                  time series data."),
+                           tags$li("Select the", code("EDA"), "tab to view exploratory data analysis plots and 
+                                   descriptive statistics."),
                            br(),
                            h4(strong("Step 9: Download the Data")),
                            tags$li("Click", code('Download Data'), "to download the raw data
@@ -228,7 +236,7 @@ server <- function(input, output, session) {
       shiny::validate(need(nrow(fDat) > 0, "Error: No data available. Check that all parameters are correctly enetered."))
       fDat$units <- readNWISpCode(pc)$parameter_units
       fDat$station_nm <- readNWISsite(input$site)$station_nm
-      fDat <- renameNWISColumns(fDat)
+      fDat <- renameNWISColumns(fDat, p00095 = 'Specific Conductance')
       return(fDat)
     }
     if (input$type == 'continuous') {
@@ -266,6 +274,80 @@ server <- function(input, output, session) {
   output$raw <- renderTable({
     usgs.data()
   })
+  
+  # Histogram for EDA:
+  output$hist <- renderPlot({
+    dat <- usgs.data()
+    hP <- ggplot(dat, aes(x = dat[,4])) +
+      geom_histogram(color = 'black', fill = 'gray') +
+      xlab(paste0(names(dat[4]),' (',dat$units[1],')')) +
+      ylab('Frequency') +
+      theme_bw() +
+      scale_y_continuous(expand = c(0,0))
+    hP + theme(axis.text = element_text(size=15),
+               axis.title = element_text(size=15))
+  })
+  
+  # Boxplot for EDA:
+  output$box <- renderPlot({
+    dat <- usgs.data()
+    bp <- ggplot(dat, aes(x = dat[,4])) +
+      geom_boxplot(fill = 'gray') +
+      xlab(paste0(names(dat[4]),' (',dat$units[1],')')) +
+      theme_bw()
+    bp + theme(axis.text.y = element_blank(),
+            axis.ticks.y = element_blank(),
+            axis.text = element_text(size=15),
+            axis.title = element_text(size=15))
+  })
+  
+  # Q-Q Plot for EDA:
+  output$qq <- renderPlot({
+    dat <- usgs.data()
+    qqP <- ggplot(dat, aes(sample = dat[,4])) +
+      stat_qq() + stat_qq_line() +
+      theme_classic() +
+      xlab('Theoretical Normal Quantiles') +
+      ylab(paste('Sample', names(dat[4]), 'Quantiles')) 
+    qqP + theme(panel.border = element_rect(fill = NA, linewidth = 1),
+                axis.text = element_text(size=15),
+                axis.title = element_text(size=15))
+  })
+
+  # Data summary for EDA:
+  output$sum <- render_gt({
+    dat <- describe(usgs.data()[,4])
+      gt(data.frame(lapply(dat,round,2))) %>% tab_header(title = 'Descriptive Statistics for Data') %>%
+        cols_align(align = 'center', columns = ) %>%
+        tab_style(style = cell_borders(sides = c("top", "bottom"), color = "black",
+                                       weight = px(2),
+                                       style = 'solid'),
+                  locations = cells_body(
+                    columns = everything(),
+                    rows = everything())) %>%
+        tab_options(column_labels.background.color = 'lightgray',
+                    table.width = pct(90))
+  })
+  
+  # Results of normality test:
+  output$norm <- render_gt({
+    dat <- usgs.data()[,4]
+    test <- ks.test(dat, "pnorm", mean(dat), sd(dat))
+    df <- data.frame(Statistic = round(test$statistic,3), 
+                     p.value = ifelse(test$p.value < 0.001, "<0.001", round(test$p.value,3)),
+                     Normality = ifelse(test$p.value > 0.05, "Noramlly Distributed",
+                                        "Not Normally Distributed"))
+    gt(df) %>% tab_header(title = 'One-Sample Komogorov-Smirnov Test for Normality') %>%
+      cols_align(align = 'center', columns = ) %>%
+      tab_style(style = cell_borders(sides = c("top", "bottom"), color = "black",
+                                     weight = px(2),
+                                     style = 'solid'),
+                locations = cells_body(
+                  columns = everything(),
+                  rows = everything())) %>%
+      tab_options(column_labels.background.color = 'lightgray')
+  })
+  
   
   # Get available site data:
   site.info <- eventReactive(input$load, {
