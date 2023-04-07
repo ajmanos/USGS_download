@@ -337,7 +337,7 @@ server <- function(input, output, session) {
                      p.value = ifelse(test$p.value < 0.001, "<0.001", round(test$p.value,3)),
                      Normality = ifelse(test$p.value > 0.05, "Noramlly Distributed",
                                         "Not Normally Distributed"))
-    gt(df) %>% tab_header(title = 'One-Sample Komogorov-Smirnov Test for Normality') %>%
+    gt(df) %>% tab_header(title = 'One-Sample Kolmogorov-Smirnov Test for Normality') %>%
       cols_align(align = 'center', columns = ) %>%
       tab_style(style = cell_borders(sides = c("top", "bottom"), color = "black",
                                      weight = px(2),
