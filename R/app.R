@@ -139,17 +139,17 @@ ui <- fluidPage(
     # Generate tabs for site data/info, plots, map, and app instructions:
     mainPanel(
       tabsetPanel(type = "tabs",
-                  tabPanel("Site Data", tableOutput("raw") %>% withSpinner(color="blue")),
+                  tabPanel("Site Data", tableOutput("raw") %>% withSpinner(color = "blue")),
                   tabPanel("EDA", plotOutput('hist'), br(), br(), plotOutput('box'), 
                            br(), br(), plotOutput('qq'), br(), br(), gt_output('sum'),
                            br(), br(), gt_output('norm') %>% withSpinner(color = "blue")),
                   tabPanel("Site Info", span("▆",style = "color:lightgreen; font-size: 28px"),
                            span("= Supported data type", style = "font-weight:bold; font-size: 16px"),
-                           dataTableOutput("infoTable") %>% withSpinner(color="blue")),
-                  tabPanel("Linear Time Series", plotlyOutput("ts_line") %>% withSpinner(color="blue")),
-                  tabPanel("3D Time Series", plotlyOutput("ts_3d") %>% withSpinner(color="blue")),
+                           dataTableOutput("infoTable") %>% withSpinner(color = "blue")),
+                  tabPanel("Linear Time Series", plotlyOutput("ts_line") %>% withSpinner(color = "blue")),
+                  tabPanel("3D Time Series", plotlyOutput("ts_3d") %>% withSpinner(color = "blue")),
                   tabPanel('Map', leafletOutput('map',height = 900) %>% 
-                             withSpinner(color="blue")),
+                             withSpinner(color = "blue")),
                   tabPanel("Instructions",  h3(strong('How to use USGS Data Explorer')),
                            br(),
                            h4(strong('Step 1: Select a State')),
@@ -282,9 +282,10 @@ server <- function(input, output, session) {
       geom_histogram(color = 'black', fill = 'gray') +
       xlab(paste0(names(dat[4]),' (',dat$units[1],')')) +
       ylab('Frequency') +
-      theme_bw() +
+      theme_classic() +
       scale_y_continuous(expand = c(0,0))
-    hP + theme(axis.text = element_text(size=15),
+    hP + theme(panel.border = element_rect(fill = NA, linewidth = 1),
+               axis.text = element_text(size=15),
                axis.title = element_text(size=15))
   })
   
@@ -294,11 +295,12 @@ server <- function(input, output, session) {
     bp <- ggplot(dat, aes(x = dat[,4])) +
       geom_boxplot(fill = 'gray') +
       xlab(paste0(names(dat[4]),' (',dat$units[1],')')) +
-      theme_bw()
-    bp + theme(axis.text.y = element_blank(),
-            axis.ticks.y = element_blank(),
-            axis.text = element_text(size=15),
-            axis.title = element_text(size=15))
+      theme_classic()
+    bp + theme(panel.border = element_rect(fill = NA, linewidth = 1),
+               axis.text.y = element_blank(),
+               axis.ticks.y = element_blank(),
+               axis.text = element_text(size=15),
+               axis.title = element_text(size=15))
   })
   
   # Q-Q Plot for EDA:
@@ -333,7 +335,7 @@ server <- function(input, output, session) {
   output$norm <- render_gt({
     dat <- usgs.data()[,4]
     test <- ks.test(dat, "pnorm", mean(dat), sd(dat))
-    df <- data.frame(Statistic = round(test$statistic,3), 
+    df <- data.frame(Statistic = round(test$statistic, 3), 
                      p.value = ifelse(test$p.value < 0.001, "<0.001", round(test$p.value,3)),
                      Normality = ifelse(test$p.value > 0.05, "Noramlly Distributed",
                                         "Not Normally Distributed"))
@@ -403,23 +405,23 @@ server <- function(input, output, session) {
                                  input$type, '_', min(year(usgs.data()[,3])), '_',
                                  max(year(usgs.data()[,3])), '.xlsx')},
     content = function(fname) {
-      write_xlsx(usgs.data(),fname)
+      write_xlsx(usgs.data(), fname)
     })
   
   # Generate time-series:
   output$ts_line <- renderPlotly({
     plot_ly(usgs.data(), type = 'scatter', mode='lines',height=800) %>%
       add_trace(x = if (input$type == 'daily' | input$type == 'water_qual') ~Date else ~dateTime,
-                y = ~usgs.data()[,4], line=list(color='darkblue')) %>%
+                y = ~usgs.data()[,4], line = list(color = 'darkblue')) %>%
       layout(title = list(text = readNWISsite(input$site)$station_nm),
-             showlegend = FALSE, yaxis = list(title = str_sub(input$pCode,8,-2)))
+             showlegend = FALSE, yaxis = list(title = str_sub(input$pCode, 8, -2)))
   })
   
   # Generate 3D time-series:
   output$ts_3d <- renderPlotly({
     #TODO: 3d time series for continuous data
     shiny::validate(need(names(usgs.data()[3]) == 'Date', "3D time series plot does not currently support continuous data."))
-    shiny::validate(need(year(input$dates[2])-year(input$dates[1]) >= 2, "Need at least 2 years of data to generate 3D plot."))
+    shiny::validate(need(year(input$dates[2]) - year(input$dates[1]) >= 2, "Need at least 2 years of data to generate 3D plot."))
     FlowMatrix       <- data.frame(Day = yday(usgs.data()$Date), 
                                    Year = year(usgs.data()$Date), Var = usgs.data()[,4])
     varMat           <- as.matrix(rasterFromXYZ(FlowMatrix))
