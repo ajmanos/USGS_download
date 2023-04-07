@@ -148,6 +148,7 @@ ui <- fluidPage(
                            dataTableOutput("infoTable") %>% withSpinner(color = "blue")),
                   tabPanel("Linear Time Series", plotlyOutput("ts_line") %>% withSpinner(color = "blue")),
                   tabPanel("3D Time Series", plotlyOutput("ts_3d") %>% withSpinner(color = "blue")),
+                  tabPanel("Other Plots", plotOutput('months')  %>% withSpinner(color = "blue")),
                   tabPanel('Map', leafletOutput('map',height = 900) %>% 
                              withSpinner(color = "blue")),
                   tabPanel("Instructions",  h3(strong('How to use USGS Data Explorer')),
@@ -219,6 +220,16 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
   
+  # Generate URL to the USGS website based on user site input:
+  site.url <- eventReactive(input$load, {
+    paste0('https://waterdata.usgs.gov/monitoring-location/',input$site,'/')
+  })
+  
+  # Display site URL to the USGS website:
+  output$selected_site <- renderUI(a("Site Info", target="_blank", href = site.url()
+  ))
+  
+  
   # Download USGS data based on user inputs:
   usgs.data <- eventReactive(input$load, {
     shiny::validate(need(nchar(input$site) >= 8, "Error: Site number must be at least 8 digits."))
@@ -236,7 +247,7 @@ server <- function(input, output, session) {
       shiny::validate(need(nrow(fDat) > 0, "Error: No data available. Check that all parameters are correctly enetered."))
       fDat$units <- readNWISpCode(pc)$parameter_units
       fDat$station_nm <- readNWISsite(input$site)$station_nm
-      fDat <- renameNWISColumns(fDat, p00095 = 'Specific Conductance')
+      fDat <- renameNWISColumns(fDat, p00065 = 'Gage Height', p00095 = 'Specific Conductance')
       return(fDat)
     }
     if (input$type == 'continuous') {
@@ -251,7 +262,7 @@ server <- function(input, output, session) {
       shiny::validate(need(nrow(fDat) > 0, "Error: No data available. Check that all parameters are correctly enetered."))
       fDat$units <- readNWISpCode(pc)$parameter_units
       fDat$station_nm <- readNWISsite(input$site)$station_nm
-      fDat <- renameNWISColumns(fDat)
+      fDat <- renameNWISColumns(fDat, p00065 = 'Gage Height', p00095 = 'Specific Conductance')
       return(fDat)
     }
     if (input$type == 'water_qual') {
@@ -260,7 +271,7 @@ server <- function(input, output, session) {
                          startDate = input$dates[1],
                          endDate = input$dates[2])
       shiny::validate(need(nrow(wqDat) > 0, "Error: No data available. Check that all parameters are correctly enetered."))
-      wqDf <- data.frame(org_id = wqDat$OrganizationIdentifier, site_no = input$site,
+      wqDf <- data.frame(org_id = wqDat$OrganizationIdentifier, site_no = gsub('USGS-','',wqDat$MonitoringLocationIdentifier),
                          Date = wqDat$ActivityStartDate,param= wqDat$ResultMeasureValue, 
                          units = wqDat$ResultMeasure.MeasureUnitCode)
       wqDf$Date <- as.character(wqDf$Date)
@@ -425,6 +436,7 @@ server <- function(input, output, session) {
     FlowMatrix       <- data.frame(Day = yday(usgs.data()$Date), 
                                    Year = year(usgs.data()$Date), Var = usgs.data()[,4])
     varMat           <- as.matrix(rasterFromXYZ(FlowMatrix))
+    shiny::validate(need(sum(is.na(varMat))/length(varMat) < 0.80, 'Error: Not enough data to generate plot.'))
     rownames(varMat) <- rev(seq(min(FlowMatrix$Year), max(FlowMatrix$Year), 1))
     y                <- as.numeric(rownames(varMat))
     tckNum           <- round(seq(1, 366, by = 30.5))
@@ -452,14 +464,21 @@ server <- function(input, output, session) {
     
   })
   
-  # Generate URL to the USGS website based on user site input:
-  site.url <- eventReactive(input$load, {
-    paste0('https://waterdata.usgs.gov/monitoring-location/',input$site,'/')
+  # Monthly boxplots:
+  output$months <- renderPlot({
+    dat <- usgs.data()
+    dat$Month <- factor(month.abb[month(dat$Date)], levels = month.abb)
+    mp <- ggplot(dat, aes(x = Month, y = dat[,4])) + 
+      geom_boxplot(fill = 'gray90', outlier.color = 'red', outlier.shape = 1) +
+      scale_x_discrete(limits = month.abb) +
+      theme_classic() +
+      ggtitle(paste('Monthly Distrbution of',names(dat[4]),':',readNWISsite(dat$site_no[1])$station_nm)) +
+      ylab(paste0(names(dat[4]),' (',dat$units[1],')'))
+    mp + theme(panel.border = element_rect(fill = NA, linewidth = 1),
+                axis.text = element_text(size=15),
+                axis.title = element_text(size=15))
   })
   
-  # Display site URL to the USGS website:
-  output$selected_site <- renderUI(a("Site Info", target="_blank", href = site.url()
-  ))
   
   # Get location of sites based on parameter code and data type:
   map.sites <- eventReactive(input$map_load, {
