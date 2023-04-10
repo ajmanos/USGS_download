@@ -10,6 +10,7 @@ library(DT)
 library(psych)
 library(gt)
 library(tidyverse)
+library(lubridate)
 
 
 # List of codes:
@@ -146,9 +147,10 @@ ui <- fluidPage(
                   tabPanel("Site Info", span("▆",style = "color:lightgreen; font-size: 28px"),
                            span("= Supported data type", style = "font-weight:bold; font-size: 16px"),
                            dataTableOutput("infoTable") %>% withSpinner(color = "blue")),
-                  tabPanel("Linear Time Series", plotlyOutput("ts_line") %>% withSpinner(color = "blue")),
+                  tabPanel("Linear Time Series", br(), plotlyOutput("ts_line") %>% withSpinner(color = "blue")),
                   tabPanel("3D Time Series", plotlyOutput("ts_3d") %>% withSpinner(color = "blue")),
-                  tabPanel("Other Plots", plotOutput('months')  %>% withSpinner(color = "blue")),
+                  tabPanel("Other Plots", br(), plotOutput('month_box'), br(), br(), plotOutput('month_ts'), br(), br(), 
+                           plotOutput('doy_ts')%>% withSpinner(color = "blue")),
                   tabPanel('Map', leafletOutput('map',height = 900) %>% 
                              withSpinner(color = "blue")),
                   tabPanel("Instructions",  h3(strong('How to use USGS Data Explorer')),
@@ -208,6 +210,7 @@ ui <- fluidPage(
                                  time series data."),
                            tags$li("Select the", code("EDA"), "tab to view exploratory data analysis plots and 
                                    descriptive statistics."),
+                           tags$li("Select the", code("Other Plots"), "tab to view various plots for the data."),
                            br(),
                            h4(strong("Step 9: Download the Data")),
                            tags$li("Click", code('Download Data'), "to download the raw data
@@ -465,7 +468,7 @@ server <- function(input, output, session) {
   })
   
   # Monthly boxplots:
-  output$months <- renderPlot({
+  output$month_box <- renderPlot({
     dat <- usgs.data()
     dat$Month <- factor(month.abb[month(dat$Date)], levels = month.abb)
     mp <- ggplot(dat, aes(x = Month, y = dat[,4])) + 
@@ -476,9 +479,48 @@ server <- function(input, output, session) {
       ylab(paste0(names(dat[4]),' (',dat$units[1],')'))
     mp + theme(panel.border = element_rect(fill = NA, linewidth = 1),
                 axis.text = element_text(size=15),
-                axis.title = element_text(size=15))
+                axis.title = element_text(size=15),
+                axis.title.x = element_blank())
   })
   
+  # Month time series:
+  output$month_ts <- renderPlot({
+    dat <- usgs.data()
+    dat$month <- factor(month.abb[month(dat$Date)], levels = month.abb)
+    dat$year <- year(dat$Date)
+    datSum <- data.frame(dat %>% group_by(month,year) %>% summarise_at(.vars = 4, .funs = mean))
+    ggplot(datSum, aes(x = year)) +
+      geom_line(aes(y = datSum[,3], group = month, colour = month), linewidth = 1, alpha = 0.7) +
+      theme_bw() +
+      ggtitle(paste('Mean Monthly', names(dat[4]),'Time Series:',readNWISsite(dat$site_no[1])$station_nm)) +
+      theme(panel.border = element_rect(fill = NA, linewidth = 1),
+            axis.title.x = element_blank(),
+            legend.title = element_blank(),
+            legend.text = element_text(size=15),
+            axis.text = element_text(size=15),
+            axis.title = element_text(size=15)) +
+      labs(y = paste('Mean log10', paste0(names(dat[4]),' (',dat$units[1],')'))) +
+      scale_y_log10() + 
+      scale_color_viridis_d()
+  })
+  
+  # Day of year time series:
+  output$doy_ts <- renderPlot({
+    dat <- usgs.data()
+    dat$year <- year(dat$Date)
+    dat$doy <- as.numeric(strftime(dat$Date, format = "%j"))
+    ggplot(dat, aes(x = doy, group = factor(year), color = year)) +
+      geom_line(aes(y = dat[,4]), size=1, alpha=0.8) +
+      scale_color_viridis_b() +
+      theme_classic() +
+      theme(legend.title = element_blank(),
+            panel.border = element_rect(fill = NA, linewidth = 1),
+            legend.text = element_text(size=15),
+            axis.text = element_text(size=15),
+            axis.title = element_text(size=15)) +
+      xlab('Day of Year') +
+      ylab(paste0(names(dat[4]),' (',dat$units[1],')'))
+  })
   
   # Get location of sites based on parameter code and data type:
   map.sites <- eventReactive(input$map_load, {
