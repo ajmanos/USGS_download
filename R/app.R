@@ -364,7 +364,6 @@ server <- function(input, output, session) {
       tab_options(column_labels.background.color = 'lightgray')
   })
   
-  
   # Get available site data:
   site.info <- eventReactive(input$load, {
     shiny::validate(need(nchar(input$site) >= 8, "Error: Site number must be at least 8 digits."))
@@ -464,7 +463,6 @@ server <- function(input, output, session) {
                             tickvals = seq(1, 366, by = 30.5),
                             ticktext = tckMo),
                camera = list(eye = list(x = 1.3, y = 1.3, z = 1.5))))
-    
   })
   
   # Monthly boxplots:
@@ -499,8 +497,7 @@ server <- function(input, output, session) {
             legend.text = element_text(size=15),
             axis.text = element_text(size=15),
             axis.title = element_text(size=15)) +
-      labs(y = paste('Mean log10', paste0(names(dat[4]),' (',dat$units[1],')'))) +
-      scale_y_log10() + 
+      labs(y = paste0(names(dat[4]),' (',dat$units[1],')')) +
       scale_color_viridis_d()
   })
   
