@@ -19,6 +19,7 @@ library(lubridate)
 # 00045 = Total Precipitation (in)
 # 00060 = Stream Flow (ft^3/s)
 # 00065 = Gage height (ft)
+# 00076 = Turbidity (NTU)
 # 00095 = Specific Conductance (uS/cm @ 25C)
 # 00300 = Dissolved Oxygen (mg/L)
 # 00300 = Dissolved Oxygen (% sat)
@@ -30,10 +31,18 @@ library(lubridate)
 # 00613 = Nitrite (mg/L-N)
 # 00618 = Nitrate (mg/L-N)
 # 00631 = Nitrate + Nitrite (mg/L-N)
+# 00660 = Orthophosphate (mg/L-PO4)
 # 00666 = Phosphorus (filtered) (mg/L-P)
-# 00674 = Orthophosphate (mg/L-P)
+# 00671 = Orthophosphate (mg/L-P)
 # 00900 = Hardness (mg/L-CaCO3)
+# 00940 = Chloride (mg/L)
+# 00945 = Sulfate (mg/L)
+# 00955 = Silica (mg/L-SiO2)
+# 61028 = Turbidity (Field) (NTU)
 # 63160 = Stream water level abov NAVD 1988 (ft)
+# 71846 = Ammonia (NH3 + NH4+) (mg/L - NH4)
+# 71851 = Nitrate (mg/L-NO3)
+# 71856 = Nitrite (mg/L-NO2)
 # 72254 = Water Velocity (ft/s)
 # 80154 = Suspended sediment (mg/L)
 # 99133 = NO3 + NO2 (mg/L-N)
@@ -41,9 +50,10 @@ library(lubridate)
 
 # Only using a subset of parameter codes available as loading in all 24,898 codes
 # significantly slows app functionality. More codes can be added upon request.
-codeList <- c('00004', '00010', '00045', '00060', '00065', '00095', '00300', '00301', '00400',
-              '00480','00600','00602', '00608', '00613', '00618', '00631', '00671', '00666', '00900', '63160', 
-              '72254', '80154', '99133')
+codeList <- c('00004', '00010', '00045', '00060', '00065', '00076', '00095', '00300', '00301',
+              '00400', '00480', '00600', '00602', '00608', '00613', '00618', '00631',
+              '00660', '00666', '00671', '00900', '00940', '00945', '00955', '61028', '63160', 
+              '71846',  '71851', '71856', '72254', '80154', '99133')
 
 codePull <- readNWISpCode(codeList)
 
@@ -62,7 +72,7 @@ ui <- fluidPage(
   titlePanel('USGS Data Explorer'),
   
   sidebarLayout(
-    sidebarPanel(
+    sidebarPanel(width = 3,
       
       # Set error message color:
       tags$head(
@@ -134,26 +144,31 @@ ui <- fluidPage(
          a("blog post",
            href = "https://waterdata.usgs.gov/blog/dataretrieval/",target = '_blank'),
          "for more information."),
+      br(),
+      h6(em("De Cicco, L.A., Hirsch, R.M., Lorenz, D., Watkins, W.D., Johnson, M., 2022, dataRetrieval: R packages for discovering and retrieving water data
+  available from Federal hydrologic web services, v.2.7.12,", a("doi:10.5066/P9X4L3GE",
+                                                      href = "https://code.usgs.gov/water/dataRetrieval/-/tree/2.7.12",
+                                                      target = '_blank')))
       
     ),
     
-    # Generate tabs for site data/info, plots, map, and app instructions:
-    mainPanel(
+    # Generate tabs for site data/info, plots, map, and app user guide:
+    mainPanel(width = 8,
       tabsetPanel(type = "tabs",
-                  tabPanel("Site Data", tableOutput("raw") %>% withSpinner(color = "blue")),
-                  tabPanel("EDA", plotOutput('hist'), br(), br(), plotOutput('box'), 
-                           br(), br(), plotOutput('qq'), br(), br(), gt_output('sum'),
-                           br(), br(), gt_output('norm') %>% withSpinner(color = "blue")),
+                  tabPanel('Map', leafletOutput('map',height = 900) %>% 
+                             withSpinner(color = "blue")),
                   tabPanel("Site Info", span("▆",style = "color:lightgreen; font-size: 28px"),
                            span("= Supported data type", style = "font-weight:bold; font-size: 16px"),
                            dataTableOutput("infoTable") %>% withSpinner(color = "blue")),
+                  tabPanel("Raw Data", tableOutput("raw") %>% withSpinner(color = "blue")),
+                  tabPanel("EDA", plotOutput('hist'), br(), br(), plotOutput('box'), 
+                           br(), br(), plotOutput('qq'), br(), br(), gt_output('sum'),
+                           br(), br(), gt_output('norm') %>% withSpinner(color = "blue")),
                   tabPanel("Linear Time Series", br(), plotlyOutput("ts_line") %>% withSpinner(color = "blue")),
                   tabPanel("3D Time Series", plotlyOutput("ts_3d") %>% withSpinner(color = "blue")),
                   tabPanel("Other Plots", br(), plotOutput('month_box'), br(), br(), plotOutput('month_ts'), br(), br(), 
                            plotOutput('doy_ts')%>% withSpinner(color = "blue")),
-                  tabPanel('Map', leafletOutput('map',height = 900) %>% 
-                             withSpinner(color = "blue")),
-                  tabPanel("Instructions",  h3(strong('How to use USGS Data Explorer')),
+                  tabPanel("User Guide",  h3(strong('How to use USGS Data Explorer')),
                            br(),
                            h4(strong('Step 1: Select a State')),
                            tags$li("Use the drop down menu to select a state of
@@ -180,6 +195,7 @@ ui <- fluidPage(
                                  menu, select the type of data to display."),
                            tags$li("Daily = daily aggregated data"),
                            tags$li("Continuous = 15-minute intervals"),
+                           tags$li("Water Quality = Data from the Water Quality Portal (WQP)"),
                            br(),
                            h4(strong('Step 4: Input Site Number')),
                            tags$li("If site is known, simply enter site in the", code('Site Number'), "."),
@@ -200,16 +216,16 @@ ui <- fluidPage(
                            br(),
                            h4(strong("Step 7: Load Data")),
                            tags$li("Click the", code('Load Data'), "button to load the data from the selected inputs."),
-                           tags$li("The raw data will appear in the", code('Site Data'), "tab."),
+                           tags$li("The raw data will appear in the", code('Raw Data'), "tab."),
                            tags$li(code('Site Info'), "will be updated whenever new site data is loaded."),
                            br(),
                            h4(strong("Step 8: View Plots")),
+                           tags$li("Select the", code("EDA"), "tab to view exploratory data analysis plots and 
+                                   descriptive statistics."),
                            tags$li("Select the", code('Linear Time Series'), "tab to view a time series of the
                                  selected parameter."),
                            tags$li("Select the", code('3D Time Series'), "tab to view a 3D representation of the
                                  time series data."),
-                           tags$li("Select the", code("EDA"), "tab to view exploratory data analysis plots and 
-                                   descriptive statistics."),
                            tags$li("Select the", code("Other Plots"), "tab to view various plots for the data."),
                            br(),
                            h4(strong("Step 9: Download the Data")),
@@ -329,20 +345,20 @@ server <- function(input, output, session) {
                 axis.text = element_text(size=15),
                 axis.title = element_text(size=15))
   })
-
+  
   # Data summary for EDA:
   output$sum <- render_gt({
     dat <- describe(usgs.data()[,4])
-      gt(data.frame(lapply(dat,round,2))) %>% tab_header(title = 'Descriptive Statistics for Data') %>%
-        cols_align(align = 'center', columns = ) %>%
-        tab_style(style = cell_borders(sides = c("top", "bottom"), color = "black",
-                                       weight = px(2),
-                                       style = 'solid'),
-                  locations = cells_body(
-                    columns = everything(),
-                    rows = everything())) %>%
-        tab_options(column_labels.background.color = 'lightgray',
-                    table.width = pct(90))
+    gt(data.frame(lapply(dat,round,2))) %>% tab_header(title = 'Descriptive Statistics for Data') %>%
+      cols_align(align = 'center', columns = ) %>%
+      tab_style(style = cell_borders(sides = c("top", "bottom"), color = "black",
+                                     weight = px(2),
+                                     style = 'solid'),
+                locations = cells_body(
+                  columns = everything(),
+                  rows = everything())) %>%
+      tab_options(column_labels.background.color = 'lightgray',
+                  table.width = pct(90))
   })
   
   # Results of normality test:
@@ -392,13 +408,13 @@ server <- function(input, output, session) {
                           "Data Type", "Stat Code", "Start Date","End Date","n")
     
     siteDF$`Data Type` <- ifelse(siteDF$`Data Type` == 'dv', 'Daily',
-                           ifelse(siteDF$`Data Type` == 'uv', 'Continuous',
-                            ifelse(siteDF$`Data Type` == 'qw', 'Water Quality',
-                             ifelse(siteDF$`Data Type` == 'sv', 'Site Visits',
-                              ifelse(siteDF$`Data Type` == 'ad', 'USGS Annual Water Report',
-                               ifelse(siteDF$`Data Type` == 'pk', 'Peak Flow',
-                                ifelse(siteDF$`Data Type` == 'aw', 'Groundwater Level',
-                                 ifelse(siteDF$`Data Type` == 'id', 'Historical Instantaneous', ""))))))))
+                                 ifelse(siteDF$`Data Type` == 'uv', 'Continuous',
+                                        ifelse(siteDF$`Data Type` == 'qw', 'Water Quality',
+                                               ifelse(siteDF$`Data Type` == 'sv', 'Site Visits',
+                                                      ifelse(siteDF$`Data Type` == 'ad', 'USGS Annual Water Report',
+                                                             ifelse(siteDF$`Data Type` == 'pk', 'Peak Flow',
+                                                                    ifelse(siteDF$`Data Type` == 'aw', 'Groundwater Level',
+                                                                           ifelse(siteDF$`Data Type` == 'id', 'Historical Instantaneous', ""))))))))
     return(siteDF)
   })
   
@@ -473,12 +489,12 @@ server <- function(input, output, session) {
       geom_boxplot(fill = 'gray90', outlier.color = 'red', outlier.shape = 1) +
       scale_x_discrete(limits = month.abb) +
       theme_classic() +
-      ggtitle(paste('Monthly Distrbution of',names(dat[4]),':',readNWISsite(dat$site_no[1])$station_nm)) +
+      ggtitle(paste0('Monthly Distrbution of ',names(dat[4]),': ',readNWISsite(dat$site_no[1])$station_nm)) +
       ylab(paste0(names(dat[4]),' (',dat$units[1],')'))
     mp + theme(panel.border = element_rect(fill = NA, linewidth = 1),
-                axis.text = element_text(size=15),
-                axis.title = element_text(size=15),
-                axis.title.x = element_blank())
+               axis.text = element_text(size=15),
+               axis.title = element_text(size=15),
+               axis.title.x = element_blank())
   })
   
   # Month time series:
@@ -490,7 +506,7 @@ server <- function(input, output, session) {
     ggplot(datSum, aes(x = year)) +
       geom_line(aes(y = datSum[,3], group = month, colour = month), linewidth = 1, alpha = 0.7) +
       theme_bw() +
-      ggtitle(paste('Mean Monthly', names(dat[4]),'Time Series:',readNWISsite(dat$site_no[1])$station_nm)) +
+      ggtitle(paste0('Mean Monthly ', names(dat[4]),': ',readNWISsite(dat$site_no[1])$station_nm)) +
       theme(panel.border = element_rect(fill = NA, linewidth = 1),
             axis.title.x = element_blank(),
             legend.title = element_blank(),
@@ -498,7 +514,7 @@ server <- function(input, output, session) {
             axis.text = element_text(size=15),
             axis.title = element_text(size=15)) +
       labs(y = paste0(names(dat[4]),' (',dat$units[1],')')) +
-      scale_color_viridis_d()
+      scale_color_viridis_d() 
   })
   
   # Day of year time series:
@@ -509,6 +525,7 @@ server <- function(input, output, session) {
     ggplot(dat, aes(x = doy, group = factor(year), color = year)) +
       geom_line(aes(y = dat[,4]), size=1, alpha=0.8) +
       scale_color_viridis_b() +
+      ggtitle(paste0('Mean Daily ', names(dat[4]),': ',readNWISsite(dat$site_no[1])$station_nm)) +
       theme_classic() +
       theme(legend.title = element_blank(),
             panel.border = element_rect(fill = NA, linewidth = 1),
