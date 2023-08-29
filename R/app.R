@@ -1,3 +1,10 @@
+if (!nzchar(system.file(package = "librarian")))
+  install.packages("librarian")
+
+librarian::shelf(
+  librarian, shiny, dataRetrieval, shinycssloaders, writexl, leaflet, sf, plotly,
+  raster, DT, psych, gt, tidyverse, lubridate)
+
 library(shiny)
 library(dataRetrieval)
 library(shinycssloaders)
